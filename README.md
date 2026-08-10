@@ -8,12 +8,34 @@ The package intentionally exposes a narrow synchronous surface:
 - Codex model listing and retrieval;
 - caller-executed function-call descriptions and results.
 
-It is not an OpenAI-supported SDK and is not a drop-in replacement for
-`openai-python`. It reverse-engineers undocumented `chatgpt.com` behavior that
-may change without notice.
+It is not an OpenAI-supported SDK. Within the deliberately narrow Responses and
+Models surface documented below, it is designed as a drop-in-oriented adapter
+for code written against `openai-python`. It reverse-engineers undocumented
+`chatgpt.com` behavior that may change without notice.
 
 > **Requirements:** Python 3.9+ and a current ChatGPT account login with Codex
 > access. Availability remains account-, plan-, and rollout-dependent.
+
+## OpenAI SDK compatibility
+
+Use the familiar primary client name and Responses call shape:
+
+```python
+from codex_backend_sdk import OpenAI
+
+client = OpenAI().authenticate()
+response = client.responses.create(model="gpt-5.4", input="Hello")
+```
+
+The compatibility target is the supported subset, not the full official SDK.
+Authentication uses a read-only Codex login instead of an API key, and the
+agent-safe boundary intentionally rejects unsupported resources, hosted tools,
+caller headers/query/body, custom base URLs, and backend-incompatible official
+parameters. Unsupported parameters fail locally instead of being silently
+discarded or reinterpreted; `max_output_tokens` remains one such parameter.
+
+See [OpenAI SDK compatibility](docs/openai-sdk-compatibility.md) for the exact
+contract and known differences.
 
 ## Agent-safety contract
 

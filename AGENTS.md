@@ -20,6 +20,8 @@ This repository is an agent-safe, unofficial Python client for the undocumented 
 - Never read, print, copy, or commit `~/.codex/auth.json`, tokens, API keys, signed URLs, or authenticated response bodies.
 - Never expose credentials or prepared authentication headers through a public method, return value, dataclass representation, or package export.
 - Only caller-executed `function` tools are allowed. The SDK must reject hosted web-search, computer-use, MCP, or other backend-executed tool types before transport.
+- Preserve OpenAI Python SDK compatibility across the supported Responses and Models subset. Keep `OpenAI` as the primary documented client name, prefer official method names, keyword names, response fields, event fields, and return shapes, and do not add a competing public request lifecycle such as `prepare`/`send`, receipts, custody sinks, or capability manifests without explicit user approval.
+- Safety restrictions take precedence over breadth. Official SDK parameters that the Codex backend or agent-safe boundary cannot honor must remain explicit local errors; never silently drop, forward, or reinterpret them. In particular, keep raising for `max_output_tokens` until the backend has a verified equivalent.
 - Keep public behavior typed and synchronous unless the existing Responses contract requires streaming. Prefer focused changes over broad rewrites.
 
 ## Verification
@@ -54,6 +56,7 @@ Every connection-capable match must be one of the three exact routes above. JWT 
 ## Documentation
 
 - `README.md` is the maintained user entrypoint.
+- `docs/openai-sdk-compatibility.md` defines the supported drop-in subset and intentional incompatibilities.
 - `docs/backend-api.md` records current reverse-engineering notes; mark superseded observations clearly.
 - `security_best_practices_report.md` records the current agent-safety review and deployment boundary.
 - `CHANGELOG.md` is append-only chronology.
