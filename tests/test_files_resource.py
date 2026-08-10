@@ -26,7 +26,10 @@ class FakeFilesClient(OpenAI):
     def _post_chatgpt(self, path, *, body, timeout=None):
         self.chatgpt_posts.append((path, body, timeout))
         if path == "/files":
-            return {"file_id": "file_123", "upload_url": "https://upload.example/file_123"}
+            return {
+                "file_id": "file_123",
+                "upload_url": "https://files.oaiusercontent.com/file_123",
+            }
         if path == "/files/file_123/uploaded":
             return {
                 "status": "success",
@@ -43,11 +46,11 @@ def test_files_upload_uses_chatgpt_file_flow(tmp_path, monkeypatch):
     file_path.write_text("hello")
     put_calls = []
 
-    def fake_put(url, *, data, headers, timeout):
-        put_calls.append((url, data.read(), headers, timeout))
+    def fake_put(url, *, data, headers, timeout, allow_redirects):
+        put_calls.append((url, data.read(), headers, timeout, allow_redirects))
         return FakePutResponse()
 
-    monkeypatch.setattr("codex_backend_sdk.resources.files.requests.put", fake_put)
+    monkeypatch.setattr(client._openai_session, "put", fake_put)
 
     uploaded = client.files.upload(file_path)
 
@@ -66,10 +69,11 @@ def test_files_upload_uses_chatgpt_file_flow(tmp_path, monkeypatch):
     assert client.chatgpt_posts[1][:2] == ("/files/file_123/uploaded", {})
     assert put_calls == [
         (
-            "https://upload.example/file_123",
+            "https://files.oaiusercontent.com/file_123",
             b"hello",
             {"x-ms-blob-type": "BlockBlob", "Content-Length": "5"},
             120,
+            False,
         )
     ]
 
@@ -103,7 +107,8 @@ def test_files_upload_retries_finalize_payload(tmp_path, monkeypatch):
     file_path.write_text("hello")
 
     monkeypatch.setattr(
-        "codex_backend_sdk.resources.files.requests.put",
+        client._openai_session,
+        "put",
         lambda *args, **kwargs: FakePutResponse(),
     )
     monkeypatch.setattr("codex_backend_sdk.resources.files.time.sleep", lambda delay: None)
@@ -112,3 +117,26 @@ def test_files_upload_retries_finalize_payload(tmp_path, monkeypatch):
 
     assert uploaded.file_id == "file_123"
     assert client.finalize_calls == 2
+
+
+def test_files_upload_rejects_non_openai_upload_url_before_put(tmp_path, monkeypatch):
+    client = FakeFilesClient()
+    file_path = tmp_path / "report.txt"
+    file_path.write_text("hello")
+    monkeypatch.setattr(
+        client._openai_session,
+        "put",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("PUT must not run")),
+    )
+
+    client._post_chatgpt = lambda *args, **kwargs: {
+        "file_id": "file_123",
+        "upload_url": "https://attacker.example/file_123",
+    }
+
+    try:
+        client.files.upload(file_path)
+    except ValueError as exc:
+        assert "non-OpenAI" in str(exc)
+    else:
+        raise AssertionError("non-OpenAI upload URL should be rejected")

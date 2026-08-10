@@ -7,9 +7,8 @@ import time
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-import requests
-
 from .._models import UploadedFile
+from .._network import reject_redirect_response, validate_openai_url
 from .._utils import _UNSET, _is_given
 
 if TYPE_CHECKING:
@@ -54,10 +53,10 @@ class Files:
             timeout=timeout,
         )
         file_id = create_payload["file_id"]
-        upload_url = create_payload["upload_url"]
+        upload_url = validate_openai_url(create_payload["upload_url"])
 
         with file_path.open("rb") as handle:
-            upload_response = requests.put(
+            upload_response = self._client._openai_session.put(
                 upload_url,
                 data=handle,
                 headers={
@@ -65,7 +64,9 @@ class Files:
                     "Content-Length": str(size),
                 },
                 timeout=self._request_timeout(timeout),
+                allow_redirects=False,
             )
+        reject_redirect_response(upload_response)
         upload_response.raise_for_status()
 
         finalize_payload = self._finalize_upload(

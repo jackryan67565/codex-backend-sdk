@@ -1,0 +1,23 @@
+# Keep common network clients from being escalated outside the offline project sandbox.
+prefix_rule(
+    pattern = [["curl", "wget", "ftp", "ssh", "scp", "sftp", "rsync", "nc", "ncat", "telnet"]],
+    decision = "forbidden",
+    justification = "This repository's Codex substrate is offline by default; use local fixtures and focused unit tests.",
+    match = ["curl https://example.com", "ssh host.example"],
+)
+
+prefix_rule(
+    pattern = ["git", ["clone", "fetch", "pull"]],
+    decision = "forbidden",
+    justification = "Remote Git reads are outside this repository's offline project substrate. Pushes to the verified configured origin are governed separately by AGENTS.md.",
+    match = ["git clone https://example.com/repo.git", "git fetch origin", "git pull origin main"],
+    not_match = ["git status --short", "git diff", "git push origin main"],
+)
+
+prefix_rule(
+    pattern = [["pip", "pip3", "uv"], ["install", "sync", "add", "update"]],
+    decision = "forbidden",
+    justification = "Package hosts are non-OpenAI destinations; use the existing environment unless the user changes the boundary.",
+    match = ["pip install -e .", "uv sync"],
+    not_match = ["uv run pytest -q"],
+)

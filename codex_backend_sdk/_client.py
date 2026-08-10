@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 import requests
 
+from ._network import reject_redirect_response, validate_openai_url
 from ._transport import request_with_retries
 from ._utils import _UNSET, _is_given
 from .storage import TokenStore, load_tokens, save_tokens, token_needs_refresh
@@ -16,6 +17,15 @@ CHATGPT_BASE_URL = "https://chatgpt.com/backend-api"
 WHAM_BASE_URL = CHATGPT_BASE_URL
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 ORIGINATOR = "codex_cli_rs"
+RESPONSES_ORIGINATOR = "codex_backend_sdk"
+_PROTECTED_BACKEND_HEADERS = frozenset({
+    "authorization",
+    "chatgpt-account-id",
+    "originator",
+    "openai-beta",
+    "host",
+    "content-length",
+})
 
 
 class CodexClient:
@@ -49,6 +59,9 @@ class CodexClient:
         self._max_retries = max_retries
         self._retry_base_delay = retry_base_delay
         self._session = requests.Session()
+        self._session.trust_env = False
+        self._openai_session = requests.Session()
+        self._openai_session.trust_env = False
         self._defaults = {
             "model": model,
             "instructions": instructions,
@@ -140,24 +153,43 @@ class CodexClient:
         headers = {
             "Authorization": f"Bearer {self._store.access_token}",
             "originator": ORIGINATOR,
-            "OpenAI-Beta": "responses=experimental",
         }
         if self._store.account_id:
             headers["ChatGPT-Account-ID"] = self._store.account_id
         return headers
 
+    @staticmethod
+    def _merge_backend_headers(
+        extra: Optional[dict[str, str]] = None,
+        *,
+        required: Optional[dict[str, str]] = None,
+    ) -> Optional[dict[str, str]]:
+        required = required or {}
+        protected = _PROTECTED_BACKEND_HEADERS | {
+            name.lower() for name in required
+        }
+        merged: dict[str, str] = {}
+        for name, value in (extra or {}).items():
+            if name.lower() in protected:
+                raise ValueError(f"Cannot override protected backend header `{name}`.")
+            merged[name] = value
+        merged.update(required)
+        return merged or None
+
     def _probe_auth(self, store: TokenStore) -> bool:
         try:
-            response = requests.get(
-                f"{WHAM_BASE_URL}/wham/usage",
+            response = self._session.get(
+                validate_openai_url(f"{WHAM_BASE_URL}/wham/usage"),
                 headers={
                     "Authorization": f"Bearer {store.access_token}",
                     "originator": ORIGINATOR,
                     **({"ChatGPT-Account-ID": store.account_id} if store.account_id else {}),
                 },
                 timeout=15,
+                allow_redirects=False,
             )
-            return response.ok
+            reject_redirect_response(response)
+            return 200 <= response.status_code < 300
         except Exception:
             return False
 
@@ -182,15 +214,32 @@ class CodexClient:
         )
         return response
 
-    def _post(self, path: str, *, body: dict[str, Any], stream: bool = False) -> requests.Response:
+    def _post(
+        self,
+        path: str,
+        *,
+        body: dict[str, Any],
+        stream: bool = False,
+        headers: Optional[dict[str, str]] = None,
+        params: Optional[dict[str, Any]] = None,
+        timeout: Any = _UNSET,
+    ) -> requests.Response:
         self._ensure_auth()
+        required_headers = {"Accept": "text/event-stream"} if stream else {}
+        if path == "/responses":
+            required_headers["originator"] = RESPONSES_ORIGINATOR
+        request_headers = self._merge_backend_headers(
+            headers,
+            required=required_headers,
+        )
         response = self._request_with_retries(
             "POST",
             f"{BASE_URL}{path}",
             json=body,
-            headers={"Accept": "text/event-stream"} if stream else None,
+            headers=request_headers,
+            params=params,
             stream=stream,
-            timeout=self._timeout,
+            timeout=self._timeout if not _is_given(timeout) else timeout,
         )
         response.raise_for_status()
         return response
@@ -243,7 +292,7 @@ class CodexClient:
             headers=self._openai_headers(headers),
             params=params,
             timeout=self._timeout if not _is_given(timeout) else timeout,
-            _use_session=False,
+            _session=self._openai_session,
         )
         response.raise_for_status()
         return response.json()
@@ -270,7 +319,7 @@ class CodexClient:
             params=params,
             stream=stream,
             timeout=self._timeout if not _is_given(timeout) else timeout,
-            _use_session=False,
+            _session=self._openai_session,
         )
         response.raise_for_status()
         return response
@@ -326,14 +375,13 @@ class CodexClient:
         return response
 
     def _request_with_retries(self, method: str, url: str, **kwargs: Any) -> requests.Response:
-        use_session = kwargs.pop("_use_session", True)
+        session = kwargs.pop("_session", self._session)
         return request_with_retries(
-            self._session,
+            session,
             method,
             url,
             max_retries=self._max_retries,
             retry_base_delay=self._retry_base_delay,
-            use_session=use_session,
             **kwargs,
         )
 
@@ -341,7 +389,8 @@ class CodexClient:
         """Return the official OpenAI Realtime WebSocket URL for Codex plugins."""
         if not model:
             raise ValueError(f"Expected a non-empty value for `model` but received {model!r}")
-        return "wss://api.openai.com/v1/realtime?" + urllib.parse.urlencode({"model": model})
+        url = "wss://api.openai.com/v1/realtime?" + urllib.parse.urlencode({"model": model})
+        return validate_openai_url(url, allowed_schemes=("wss",))
 
 
 OpenAI = CodexClient

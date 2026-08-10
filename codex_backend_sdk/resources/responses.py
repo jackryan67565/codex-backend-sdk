@@ -102,7 +102,14 @@ class Responses:
             tool_choice=tool_choice,
             tools=tools,
         )
-        response = self._client._post("/responses", body=request.payload, stream=True)
+        response = self._client._post(
+            "/responses",
+            body=request.payload,
+            stream=True,
+            headers=extra_headers,
+            params=extra_query,
+            timeout=timeout,
+        )
         events = stream_response_events(response)
         stream_enabled = bool(stream) if _is_given(stream) else False
 

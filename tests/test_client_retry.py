@@ -47,6 +47,7 @@ def test_retry_retries_5xx_then_returns_success(monkeypatch):
 
     assert response.json() == {"ok": True}
     assert len(client._session.calls) == 2
+    assert client._session.calls[0][2]["allow_redirects"] is False
     assert sleeps == [0]
 
 

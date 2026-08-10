@@ -1,0 +1,31 @@
+# Conservative project defaults. These apply after the repository is trusted.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+web_search = "disabled"
+
+[sandbox_workspace_write]
+network_access = false
+
+[features]
+apps = false
+browser_use = false
+browser_use_external = false
+browser_use_full_cdp_access = false
+computer_use = false
+in_app_browser = false
+plugins = false
+
+# Project overlays for MCP entries currently inherited from the user layer.
+# Only the official OpenAI documentation server remains enabled here.
+[mcp_servers.node_repl]
+enabled = false
+
+[mcp_servers.playwright]
+enabled = false
+
+[mcp_servers.figma]
+enabled = false
+
+[mcp_servers.openaiDeveloperDocs]
+enabled = true
+url = "https://developers.openai.com/mcp"

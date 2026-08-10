@@ -7,6 +7,8 @@ from typing import Any
 
 import requests
 
+from ._network import reject_redirect_response, validate_openai_url
+
 
 def request_with_retries(
     session: requests.Session,
@@ -15,14 +17,15 @@ def request_with_retries(
     *,
     max_retries: int,
     retry_base_delay: float,
-    use_session: bool = True,
     **kwargs: Any,
 ) -> requests.Response:
+    validate_openai_url(url)
+    kwargs["allow_redirects"] = False
     last_error: requests.RequestException | None = None
     for attempt in range(max_retries + 1):
         try:
-            request = session.request if use_session else requests.request
-            response = request(method, url, **kwargs)
+            response = session.request(method, url, **kwargs)
+            reject_redirect_response(response)
             if should_retry_response(response, attempt, max_retries=max_retries):
                 sleep_before_retry(response, attempt, retry_base_delay=retry_base_delay)
                 continue

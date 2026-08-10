@@ -45,6 +45,13 @@ def test_account_info_when_not_authenticated():
     }
 
 
+def test_client_sessions_ignore_environment_proxies():
+    client = CodexClient()
+
+    assert client._session.trust_env is False
+    assert client._openai_session.trust_env is False
+
+
 
 def test_authenticate_non_interactive_uses_loaded_tokens(monkeypatch):
     monkeypatch.setattr("codex_backend_sdk._client.load_tokens", lambda: _store())

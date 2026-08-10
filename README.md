@@ -3,18 +3,23 @@
 Unofficial Python SDK for the ChatGPT Codex backend API
 (`chatgpt.com/backend-api/codex`).
 
-This package mirrors the official OpenAI Python SDK shape for the API surface
-that the Codex backend exposes. Use `OpenAI`, `client.responses.create(...)`,
-and `client.models.list()` just as you would with `openai-python`, with
-Codex-specific authentication and backend limitations under the hood.
+This package intentionally resembles selected synchronous `openai-python`
+resources where the Codex backend overlaps with them. It is not a drop-in
+replacement: routes differ in authentication, billing, availability, response
+typing, and supported parameters.
 
-> **Requirements:** a ChatGPT Plus, Pro, or Enterprise subscription.
-> Authentication goes through ChatGPT OAuth and stores tokens in
+> **Requirements:** Python 3.9+ and a ChatGPT account with Codex access.
+> Availability is account-, plan-, and rollout-dependent. Authentication uses
+> ChatGPT OAuth and shares `$CODEX_HOME/auth.json` with Codex CLI, defaulting to
 > `~/.codex/auth.json`.
 
 > **Disclaimer:** This is an independent, community-maintained library that
 > reverse-engineers undocumented endpoints of `chatgpt.com`. It is not
 > affiliated with, endorsed by, or supported by OpenAI.
+
+This README is the maintained SDK contract. [Backend API notes](docs/backend-api.md)
+record dated reverse-engineering observations and include some routes that the
+SDK does not expose.
 
 ## Installation
 
@@ -23,6 +28,22 @@ git clone https://github.com/B4PT0R/codex-backend-sdk.git
 cd codex-backend-sdk
 pip install -e .
 ```
+
+For development dependencies, use `pip install -e ".[dev]"`. Package
+installation may contact the package indexes configured for your environment;
+it is not covered by the SDK runtime network boundary described below.
+
+## Authentication Behavior
+
+`OpenAI().authenticate()` reuses the shared Codex credentials at
+`$CODEX_HOME/auth.json` (default `~/.codex/auth.json`). It may refresh and
+rewrite those credentials. If no usable credentials exist, it opens the system
+browser and listens on `127.0.0.1:1455` for the OAuth callback.
+
+`authenticate(interactive=False)` prevents browser login, but it is not an
+offline operation: it may refresh credentials or probe ChatGPT, and it raises
+`RuntimeError` when stored credentials cannot be used. Never print or commit the
+credential file or authenticated response bodies.
 
 ## Basic Usage
 
@@ -67,7 +88,8 @@ info = client.models.retrieve("gpt-5.4")
 ## Multi-Turn Input
 
 The Codex backend does not expose `previous_response_id`, so pass prior
-input/output items explicitly.
+input/output items explicitly. Responses calls are caller-managed and
+stateless: they do not create, list, or resume ChatGPT UI conversations.
 
 ```python
 history = [
@@ -99,23 +121,20 @@ tools = [{
     },
 }]
 
-first = client.responses.create(
-    input="What's the weather in Paris?",
-    tools=tools,
-)
+history = [{"role": "user", "content": "What's the weather in Paris?"}]
+first = client.responses.create(input=history, tools=tools)
 
 call = next(item for item in first.output if item["type"] == "function_call")
 result = {"temperature": 18, "unit": "celsius", "condition": "cloudy"}
+history.extend(first.output)
+history.append({
+    "type": "function_call_output",
+    "call_id": call["call_id"],
+    "output": json.dumps(result),
+})
 
 second = client.responses.create(
-    input=[
-        call,
-        {
-            "type": "function_call_output",
-            "call_id": call["call_id"],
-            "output": json.dumps(result),
-        },
-    ],
+    input=history,
     tools=tools,
 )
 
@@ -149,10 +168,16 @@ response = client.responses.create(
 )
 ```
 
-## Supported Backend Endpoints
+## Exposed Backend Resources
 
-The SDK exposes the supported backend endpoints through either OpenAI-shaped
-resources (`responses`, `models`, `realtime`) or Codex-only resources (`codex`).
+The SDK exposes backend endpoints through OpenAI-shaped or backend-specific
+top-level resources (`responses`, `models`, `realtime`, `embeddings`, `audio`,
+`images`, and `files`) plus the `codex` namespace for Codex/ChatGPT-only account
+resources.
+
+“Exposed” means that a client method exists; it does not guarantee that every
+account is entitled to the route. Experimental, Platform-billed, raw, and
+plan-dependent behavior is called out below.
 
 | Backend endpoint | SDK method | Notes |
 |---|---|---|
@@ -161,7 +186,7 @@ resources (`responses`, `models`, `realtime`) or Codex-only resources (`codex`).
 | `POST /backend-api/codex/memories/trace_summarize` | `client.codex.memories.trace_summarize(...)` | Raw Codex memory trace summarization helper. |
 | `GET /backend-api/codex/models` | `client.models.list()` / `client.models.retrieve(...)` | OpenAI-shaped model objects with Codex metadata preserved as extra fields. |
 | `POST /backend-api/codex/realtime/calls` | `client.realtime.calls.create(...)` | Experimental SDP call creation. The protocol is implemented by Codex, but ChatGPT routing is rollout-dependent and may return `404 Not Found`. |
-| `wss://api.openai.com/v1/realtime?model=...` | `client.realtime_websocket_url(...)` / `client.realtime.websocket_headers(...)` | Voice v2 helpers; requires a Realtime API key obtained during OAuth or supplied by the auth store. |
+| `wss://api.openai.com/v1/realtime?model=...` | `client.realtime_websocket_url(...)` / `client.realtime.websocket_headers(...)` | Voice v2 connection-material helpers; requires a Realtime API key from the auth store or `OPENAI_API_KEY`. The SDK does not open the socket. |
 | `POST /v1/embeddings` | `client.embeddings.create(...)` | Uses the Codex OAuth access token against `api.openai.com`; usage is charged to the associated OpenAI Platform organization. |
 | `POST /backend-api/transcribe` | `client.audio.transcriptions.create(...)` | Uses the authenticated ChatGPT backend for non-streaming batch transcription; no developer API key is required. |
 | `POST /backend-api/codex/images/generations` | `client.images.generate(...)` | Generates images through the authenticated Codex backend and returns typed base64 image data. |
@@ -175,7 +200,7 @@ resources (`responses`, `models`, `realtime`) or Codex-only resources (`codex`).
 | `GET /backend-api/wham/tasks/{task_id}/turns` | `client.codex.tasks.turns.list(task_id)` | Raw task turn mapping. |
 | `GET /backend-api/wham/tasks/{task_id}/turns/{turn_id}/sibling_turns` | `client.codex.tasks.turns.sibling_turns(task_id, turn_id)` | Raw sibling turn list. |
 | `GET /backend-api/wham/environments` | `client.codex.environments.list()` | Raw Codex cloud environment list. |
-| `POST /backend-api/files` + signed upload | `client.files.upload(...)` | Uploads local files for Codex Apps/MCP file parameters and returns `sediment://...` metadata. |
+| `POST /backend-api/files` + signed upload | `client.files.upload(...)` | Uploads local files only when the signed URL remains on an approved OpenAI-operated domain and returns `sediment://...` metadata. |
 | `GET /backend-api/memories` | `client.codex.memories.list()` | Raw ChatGPT memory payload for the authenticated account. |
 | `GET /backend-api/user_system_messages` | `client.codex.user_system_messages.retrieve()` | Raw ChatGPT customization/system-message payload. |
 
@@ -203,6 +228,14 @@ Supported request fields:
 The backend itself requires streaming. When `stream=True`, the SDK yields
 `ResponseStreamEvent` objects directly. When `stream` is omitted or false, the
 SDK consumes the SSE stream and returns a collected `Response`.
+
+HTTP Responses requests use the ChatGPT OAuth bearer, account ID, Codex
+originator, and `Accept: text/event-stream`. They do not send the historical
+`OpenAI-Beta: responses=experimental` header. `extra_headers`, `extra_query`,
+and per-call `timeout` are forwarded. For Responses only, `extra_headers`
+cannot override `Authorization`, `ChatGPT-Account-ID`, `originator`,
+`OpenAI-Beta`, `Host`, `Content-Length`, or the required `Accept` header; names
+are matched case-insensitively.
 
 ```python
 response = client.responses.create(
@@ -244,9 +277,10 @@ Collected responses expose convenience properties for common output items:
 
 Unsupported official Responses parameters are rejected explicitly with
 `CodexBackendUnsupportedParameterError`, including `temperature`, `top_p`,
-`max_output_tokens`, `metadata`, `user`, `safety_identifier`, `truncation`,
-`previous_response_id`, `conversation`, `background`, `prompt`,
-`prompt_cache_retention`, and `stream_options`.
+`top_logprobs`, `max_output_tokens`, `max_tool_calls`, `metadata`, `user`,
+`safety_identifier`, `truncation`, `previous_response_id`, `conversation`,
+`context_management`, `background`, `prompt`, `prompt_cache_retention`,
+`stream_options`, and `extra_body`.
 
 ### Context Compaction
 
@@ -273,6 +307,11 @@ as opaque backend state.
 `client.models.list()` and `client.models.retrieve(model)` mirror the official
 OpenAI models resource, while preserving Codex-specific metadata as extra
 Pydantic fields. The returned page also exposes the backend `ETag` when present.
+Lists are cached per client for five minutes; use
+`client.models.list(force_refresh=True)` to refresh. `retrieve(model)` searches
+that list rather than calling a model-specific route. The OpenAI-compatibility
+arguments `extra_headers`, `extra_query`, `extra_body`, and `timeout` are
+currently accepted by these two model methods but ignored.
 
 ```python
 models = client.models.list()
@@ -332,14 +371,20 @@ headers = client.realtime.websocket_headers(session_id="voice-session")
 During interactive ChatGPT OAuth login, the SDK exchanges the fresh ID token for
 the temporary API key required by Realtime and stores it with the other local
 credentials. Existing credentials created by older SDK versions may require one
-forced interactive login before these headers are available.
+forced interactive login before these headers are available. The header helper
+prefers that stored Realtime key and falls back to `OPENAI_API_KEY`; neither is
+the ChatGPT OAuth access token.
 
 For non-interactive checks, you can avoid triggering a browser login flow:
 
 ```python
-client = OpenAI().authenticate(interactive=False)
-print(client.authenticated)
-print(client.account_info())
+try:
+    client = OpenAI().authenticate(interactive=False)
+except RuntimeError:
+    print("No usable stored Codex credentials")
+else:
+    print(client.authenticated)
+    print(client.account_info())
 ```
 
 ### Embeddings
@@ -373,12 +418,18 @@ with open("meeting.wav", "rb") as audio:
 print(transcription.text)
 ```
 
+JSON format returns a typed `Transcription`; `response_format="text"` returns a
+string.
+
 ### Image Generation
 
 `client.images.generate(...)` uses the ChatGPT-authenticated Codex image backend,
 not the separately billed OpenAI Platform image endpoint.
 
 ```python
+import base64
+
+
 image = client.images.generate(
     prompt="A cheerful blue robot holding a red flower",
     model="gpt-image-2",
@@ -426,6 +477,9 @@ Typical fields include:
 Detailed reset credits are available separately:
 
 ```python
+import uuid
+
+
 credits = client.codex.rate_limit_reset_credits.list()
 for credit in credits.credits:
     print(credit.id, credit.title, credit.expires_at)
@@ -440,17 +494,31 @@ result = client.codex.rate_limit_reset_credits.consume(
 ### Codex Cloud Tasks
 
 The `client.codex.tasks` and `client.codex.environments` namespaces expose
-read-only WHAM cloud-task payloads as raw backend dictionaries.
+read-only WHAM Codex Cloud payloads as raw JSON. Task calls return mappings;
+`environments.list()` is currently observed as a list of environment objects.
+Treat fields defensively because availability and payload shape are
+account-dependent.
 
 ```python
-tasks = client.codex.tasks.list(limit=10)
-task = client.codex.tasks.retrieve(tasks["items"][0]["id"])
-turns = client.codex.tasks.turns.list(task["task"]["id"])
+page = client.codex.tasks.list(limit=10)
+for summary in page.get("items", []):
+    task_id = summary["id"]
+    task = client.codex.tasks.retrieve(task_id)
+    turns = client.codex.tasks.turns.list(task_id)
+    current_turn_id = turns.get("current_turn_id")
+    siblings = (
+        client.codex.tasks.turns.sibling_turns(task_id, current_turn_id)
+        if current_turn_id
+        else None
+    )
+
 environments = client.codex.environments.list()
 ```
 
 Supported task-list filters are `limit`, `cursor`, `task_filter`, and
-`environment_id`.
+`environment_id`. These task and turn routes represent Codex Cloud execution
+history. They do **not** list or load ordinary ChatGPT sidebar conversations;
+this SDK currently exposes no general ChatGPT conversation-history resource.
 
 ### ChatGPT Account Data
 
@@ -464,7 +532,8 @@ requirements = client.codex.config.requirements()
 ```
 
 These methods return raw backend dictionaries because these payloads can contain
-personal account-specific fields and may change without notice.
+personal account-specific fields and may change without notice. ChatGPT
+memories and customization are separate from ChatGPT conversation history.
 
 `client.codex.memories.trace_summarize(...)` exposes the Codex memory
 summarization endpoint used by the official client. It accepts dictionaries or
@@ -487,19 +556,75 @@ summary = client.codex.memories.trace_summarize(
 print(summary.output[0].memory_summary)
 ```
 
-Transient HTTP failures (`429`, `5xx`, timeouts, and connection errors) are
-retried by default. Configure this with `OpenAI(max_retries=..., retry_base_delay=...)`.
-
 ### File Uploads
 
-`client.files.upload(...)` follows the official Codex file flow for Apps/MCP
-file parameters: create file metadata under ChatGPT, upload bytes to the signed
-URL, then finalize the upload.
+`client.files.upload(...)` follows the currently observed Codex client flow for
+Apps/MCP file parameters: create file metadata under ChatGPT, upload bytes to
+the signed URL, then finalize the upload. The SDK rejects non-HTTPS,
+non-standard-port, or non-OpenAI upload destinations and never follows upload
+redirects. The local upload limit is 512 MiB.
 
 ```python
 uploaded = client.files.upload("report.csv")
 print(uploaded.uri)  # sediment://file_...
 ```
+
+The returned `download_url` is opaque metadata. The SDK does not validate or
+fetch it.
+
+### Retries
+
+Requests sent through the shared API transport retry `429`, `5xx`, timeout, and
+connection failures by default. Configure this with
+`OpenAI(max_retries=..., retry_base_delay=...)`. This includes POST requests, so
+a request may be replayed; use an idempotency key whenever a mutating resource
+provides one. SSE failures after response consumption begins are not resumed.
+
+OAuth token exchanges and the signed file-upload `PUT` do not use the shared
+retry loop. File finalization separately polls while the backend returns
+`status: "retry"`.
+
+## Network Boundary
+
+SDK-owned HTTP requests enforce an application-level hostname policy: HTTPS on
+port 443 to `chatgpt.com`, `openai.com`, `oaiusercontent.com`, or
+`oaistatic.com`, including their subdomains. The HTTP clients ignore environment
+proxy variables and do not follow redirects. This is not operating-system egress
+enforcement.
+
+The OAuth flow additionally opens an approved `auth.openai.com` URL in the
+system browser and listens on loopback `127.0.0.1:1455` for the callback. Browser
+navigation is outside the SDK HTTP policy. The Realtime WebSocket helpers only
+return a validated URL and headers; the caller-owned WebSocket transport is
+responsible for its own proxy and redirect behavior.
+
+URLs included inside API request payloads are sent to OpenAI but are not fetched
+by this SDK. Package installation and Git remotes are development-time tooling,
+not SDK runtime egress, and are outside this boundary.
+
+## Development Verification
+
+Do not run bare `pytest` unless you intend to run authenticated integration
+tests. The offline unit suite is:
+
+```bash
+python3 -m pytest -q \
+  tests/test_account_info.py \
+  tests/test_client_retry.py \
+  tests/test_codex_resources.py \
+  tests/test_files_resource.py \
+  tests/test_images.py \
+  tests/test_network_policy.py \
+  tests/test_openai_oauth_resources.py \
+  tests/test_realtime_resource.py \
+  tests/test_responses_resource.py \
+  tests/test_transport_headers.py
+```
+
+`test_basic.py`, `test_conversation.py`, `test_reasoning.py`,
+`test_structured_output.py`, and `test_tools.py` authenticate through the shared
+fixture and contact live services. Run them only when you intend to use stored
+credentials, network access, and account quota.
 
 ### Observed But Not Exposed
 
@@ -509,3 +634,5 @@ plan-gated, unavailable on `chatgpt.com`, or not stable enough:
 
 - `POST /v1/audio/speech` (auth reaches the endpoint, but Pro OAuth lacks
   `api.model.audio.request` in current tests)
+- `wss://chatgpt.com/backend-api/wham/remote/control/server` and its enrollment
+  route (observed in Codex clients; not opened or exposed by this SDK)

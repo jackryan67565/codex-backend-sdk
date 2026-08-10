@@ -21,6 +21,7 @@ __version__ = "0.3.10"
 
 from .oauth import run_oauth_flow, refresh_access_token
 from .storage import load_tokens, save_tokens, TokenStore
+from ._network import OpenAINetworkPolicyError
 from .codex_client import (
     CodexBackendUnsupportedParameterError,
     CodexBaseModel,
@@ -96,4 +97,5 @@ __all__ = [
     "load_tokens",
     "save_tokens",
     "TokenStore",
+    "OpenAINetworkPolicyError",
 ]

@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- Removed the historical `OpenAI-Beta: responses=experimental` header from ChatGPT backend HTTP requests and identified Responses calls as `originator: codex_backend_sdk` instead of impersonating the Rust CLI.
+- Forwarded `extra_headers`, `extra_query`, and per-call `timeout` from `client.responses.create(...)` and `client.responses.parse(...)` instead of silently ignoring them.
+- Rejected attempts to override protected authentication, routing, framing, or streaming headers through Responses `extra_headers`.
+
+### Tests
+- Added final-wire coverage for the prepared Responses request, including OAuth/account headers, SSE negotiation, query and timeout forwarding, absence of the historical beta header, and case-insensitive protected-header rejection.
+
+### Documentation
+- Reconciled authentication, Responses headers, retries, file uploads, and the application-level OpenAI hostname boundary with the current implementation.
+- Clarified that Responses history is caller-managed, Codex Cloud tasks/turns are not ChatGPT sidebar conversations, and the SDK does not expose general ChatGPT conversation history.
+- Added safe offline-versus-live test guidance and corrected runnable examples and dated backend observations.
+
 ## [0.3.10] - 2026-07-17
 
 ### Added

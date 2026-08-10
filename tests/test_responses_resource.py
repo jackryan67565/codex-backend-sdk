@@ -31,10 +31,21 @@ class FakeClient(OpenAI):
     def __init__(self):
         super().__init__(model="gpt-test")
         self.posts = []
+        self.post_options = []
         self.gets = []
 
-    def _post(self, path, *, body, stream=False):
+    def _post(
+        self,
+        path,
+        *,
+        body,
+        stream=False,
+        headers=None,
+        params=None,
+        timeout=None,
+    ):
         self.posts.append((path, body, stream))
+        self.post_options.append((headers, params, timeout))
         if path == "/responses/compact":
             return FakeJSONResponse({
                 "id": "resp_123",
@@ -91,8 +102,18 @@ class TextOptions:
 
 
 class ParseFakeClient(FakeClient):
-    def _post(self, path, *, body, stream=False):
+    def _post(
+        self,
+        path,
+        *,
+        body,
+        stream=False,
+        headers=None,
+        params=None,
+        timeout=None,
+    ):
         self.posts.append((path, body, stream))
+        self.post_options.append((headers, params, timeout))
         return FakeSSE([
             (
                 'data: {"type":"response.output_text.delta","delta":'
@@ -138,6 +159,23 @@ def test_responses_create_collects_to_pydantic_response():
     ]
     assert payload["reasoning"] == {"effort": "low", "summary": "auto"}
     assert payload["text"] == {"verbosity": "low"}
+
+
+def test_responses_create_forwards_transport_options():
+    client = FakeClient()
+    extra_headers = {"X-Trace-ID": "trace-123"}
+    extra_query = {"trace": "enabled"}
+
+    client.responses.create(
+        input="Hi",
+        extra_headers=extra_headers,
+        extra_query=extra_query,
+        timeout=None,
+    )
+
+    assert client.post_options[0] == (extra_headers, extra_query, None)
+    assert extra_headers == {"X-Trace-ID": "trace-123"}
+    assert extra_query == {"trace": "enabled"}
 
 
 def test_response_exposes_tool_calls_and_reasoning_summary():
