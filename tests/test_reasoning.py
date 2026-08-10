@@ -3,6 +3,8 @@
 import pytest
 from codex_backend_sdk import CodexClient
 
+pytestmark = pytest.mark.live
+
 _HARD_MATH = (
     "A train leaves city A at 9 am at 60 mph. "
     "Another leaves city B (300 miles away) at 10 am toward A at 90 mph. "

@@ -50,6 +50,8 @@ class ResponsesCreateRequest(CodexBaseModel):
         reasoning = None if not _is_given(params["reasoning"]) else params["reasoning"]
         text = None if not _is_given(params["text"]) else params["text"]
         tool_choice = "auto" if not _is_given(params["tool_choice"]) else params["tool_choice"]
+        if tools:
+            _validate_tool_choice(tool_choice, tools)
         parallel_tool_calls = bool(_default(params["parallel_tool_calls"], False)) if tools else False
 
         payload = {
@@ -175,7 +177,31 @@ def normalize_input_item(item: Any) -> dict[str, Any]:
 def normalize_tools(tools: Any) -> list[dict[str, Any]]:
     if not _is_given(tools) or tools is None:
         return []
-    return [_as_dict(tool) for tool in tools]
+    normalized = [_as_dict(tool) for tool in tools]
+    for tool in normalized:
+        if tool.get("type") != "function":
+            raise ValueError(
+                "The agent-safe SDK permits only caller-executed function tools; "
+                "hosted, web-search, computer-use, and MCP tools are not allowed."
+            )
+        if not isinstance(tool.get("name"), str) or not tool["name"]:
+            raise ValueError("Every function tool must have a non-empty `name`.")
+        parameters = tool.get("parameters")
+        if parameters is not None and not isinstance(parameters, dict):
+            raise TypeError("Function tool `parameters` must be a JSON-schema object.")
+    return normalized
+
+
+def _validate_tool_choice(tool_choice: Any, tools: list[dict[str, Any]]) -> None:
+    if isinstance(tool_choice, str) and tool_choice in {"auto", "none", "required"}:
+        return
+    choice = _as_dict(tool_choice)
+    if choice.get("type") != "function":
+        raise ValueError("The agent-safe SDK permits only function tool choices.")
+    name = choice.get("name")
+    available_names = {tool["name"] for tool in tools}
+    if not isinstance(name, str) or name not in available_names:
+        raise ValueError("Function tool choice must name one of the supplied tools.")
 
 
 def normalize_reasoning(reasoning: Any) -> dict[str, Any]:

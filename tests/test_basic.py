@@ -1,6 +1,10 @@
-"""Basic Responses, Models, and Codex-only resources."""
+"""Live Responses and Models integration tests."""
+
+import pytest
 
 from codex_backend_sdk import CodexClient, Response
+
+pytestmark = pytest.mark.live
 
 
 def test_responses_create_returns_text(client: CodexClient):
@@ -28,8 +32,3 @@ def test_models_list_and_retrieve(client: CodexClient):
     assert models.data, "No models returned"
     assert any("gpt" in model.id or "codex" in model.id for model in models)
     assert client.models.retrieve(models[0].id).id == models[0].id
-
-
-def test_usage_returns_dict(client: CodexClient):
-    quota = client.codex.usage()
-    assert isinstance(quota, dict), f"Expected dict, got {type(quota)}"

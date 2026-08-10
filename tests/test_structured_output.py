@@ -2,7 +2,11 @@
 
 import json
 
+import pytest
+
 from codex_backend_sdk import CodexClient
+
+pytestmark = pytest.mark.live
 
 
 def _json_schema(schema: dict) -> dict:

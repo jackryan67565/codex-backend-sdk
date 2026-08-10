@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codex-backend-sdk"
-version = "0.3.10"
-description = "Unofficial Python SDK for the ChatGPT Codex backend API"
+version = "0.4.0"
+description = "Agent-safe Python client for the ChatGPT Codex Responses backend"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
@@ -27,8 +27,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-openai    = ["openai>=1.0"]
-dev       = ["pytest>=7.0", "openai>=1.0"]
+dev = ["pytest>=7.0"]
+
+[tool.pytest.ini_options]
+markers = [
+    "live: uses stored credentials, OpenAI network access, and account quota",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["codex_backend_sdk"]

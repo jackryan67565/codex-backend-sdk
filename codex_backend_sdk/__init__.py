@@ -1,101 +1,52 @@
-"""
-codex-backend-sdk — Unofficial Python SDK for the ChatGPT Codex backend API.
+"""Agent-safe, unofficial Python client for the ChatGPT Codex backend.
 
-DISCLAIMER: This is an independent, community-maintained library that
-reverse-engineers undocumented endpoints of chatgpt.com. It is not
-affiliated with, endorsed by, or supported by OpenAI. Use is subject
-to OpenAI's Terms of Use (https://openai.com/policies/terms-of-use).
-Endpoints may change or break without notice.
-
-Quickstart:
-    from codex_backend_sdk import OpenAI
-
-    client = OpenAI().authenticate()        # opens browser on first run
-    # subsequent runs load & refresh tokens automatically
-
-    response = client.responses.create(input="Explain quicksort")
-    print(response.output_text)
+The public package intentionally exposes only stateless Responses and model
+discovery. It does not export credential objects, raw transports, account data,
+uploads, Realtime connection material, or state-changing ChatGPT resources.
 """
 
-__version__ = "0.3.10"
+__version__ = "0.4.0"
 
-from .oauth import run_oauth_flow, refresh_access_token
-from .storage import load_tokens, save_tokens, TokenStore
 from ._network import OpenAINetworkPolicyError
 from .codex_client import (
     CodexBackendUnsupportedParameterError,
     CodexBaseModel,
-    CreateEmbeddingResponse,
-    Embedding,
-    EmbeddingUsage,
-    ImageData,
-    ImageResponse,
-    RateLimitResetCredit,
-    RateLimitResetCredits,
-    ConsumeRateLimitResetCreditResponse,
+    CodexClient,
+    CompactedResponse,
+    Model,
+    OpenAI,
+    ParsedResponse,
     ReasoningEffort,
     ReasoningSummary,
-    ServiceTier,
-    Verbosity,
-    CodexClient,
-    OpenAI,
-    MemorySummarizeOutput,
-    MemorySummarizeResponse,
-    Model,
-    RawMemory,
-    RawMemoryMetadata,
-    ParsedResponse,
     Response,
     ResponseFormatJsonSchema,
     ResponseStreamEvent,
     ResponseUsage,
-    RealtimeCallResponse,
+    ServiceTier,
     SyncPage,
-    CompactedResponse,
-    Transcription,
-    UploadedFile,
-    image_url,
+    Verbosity,
     image_b64,
+    image_url,
 )
 
 __all__ = [
-    "CodexClient",
-    "OpenAI",
     "CodexBackendUnsupportedParameterError",
     "CodexBaseModel",
-    "CreateEmbeddingResponse",
-    "Embedding",
-    "EmbeddingUsage",
-    "ImageData",
-    "ImageResponse",
-    "RateLimitResetCredit",
-    "RateLimitResetCredits",
-    "ConsumeRateLimitResetCreditResponse",
-    "MemorySummarizeOutput",
-    "MemorySummarizeResponse",
+    "CodexClient",
+    "CompactedResponse",
     "Model",
+    "OpenAI",
+    "OpenAINetworkPolicyError",
     "ParsedResponse",
-    "RawMemory",
-    "RawMemoryMetadata",
+    "ReasoningEffort",
+    "ReasoningSummary",
     "Response",
     "ResponseFormatJsonSchema",
     "ResponseStreamEvent",
     "ResponseUsage",
-    "RealtimeCallResponse",
-    "SyncPage",
-    "CompactedResponse",
-    "Transcription",
-    "UploadedFile",
-    "ReasoningEffort",
-    "ReasoningSummary",
     "ServiceTier",
+    "SyncPage",
     "Verbosity",
-    "image_url",
     "image_b64",
-    "run_oauth_flow",
-    "refresh_access_token",
-    "load_tokens",
-    "save_tokens",
-    "TokenStore",
-    "OpenAINetworkPolicyError",
+    "image_url",
 ]

@@ -1,8 +1,4 @@
-"""OpenAI-shaped Python client for the ChatGPT Codex backend.
-
-This module is kept as a compatibility facade. Implementation lives in
-``codex_backend_sdk._client`` and ``codex_backend_sdk.resources``.
-"""
+"""Compatibility facade for the agent-safe Codex backend client."""
 
 from __future__ import annotations
 
@@ -10,32 +6,16 @@ from ._client import CodexClient, OpenAI
 from ._models import (
     CodexBaseModel,
     CompactedResponse,
-    CreateEmbeddingResponse,
-    Embedding,
-    EmbeddingUsage,
-    ImageData,
-    ImageResponse,
     Model,
-    MemorySummarizeOutput,
-    MemorySummarizeResponse,
     ParsedResponse,
-    RawMemory,
-    RawMemoryMetadata,
-    RateLimitResetCredit,
-    RateLimitResetCredits,
-    ConsumeRateLimitResetCreditResponse,
     ReasoningEffort,
     ReasoningSummary,
-    RealtimeCallResponse,
     Response,
     ResponseFormatJsonSchema,
     ResponseStreamEvent,
     ResponseUsage,
     ServiceTier,
     SyncPage,
-    TokenDetails,
-    Transcription,
-    UploadedFile,
     Verbosity,
 )
 from ._utils import CodexBackendUnsupportedParameterError, image_b64, image_url
@@ -44,34 +24,18 @@ __all__ = [
     "CodexBackendUnsupportedParameterError",
     "CodexBaseModel",
     "CodexClient",
-    "CreateEmbeddingResponse",
-    "Embedding",
-    "EmbeddingUsage",
-    "ImageData",
-    "ImageResponse",
     "CompactedResponse",
-    "MemorySummarizeOutput",
-    "MemorySummarizeResponse",
     "Model",
     "OpenAI",
     "ParsedResponse",
-    "RawMemory",
-    "RawMemoryMetadata",
-    "RateLimitResetCredit",
-    "RateLimitResetCredits",
-    "ConsumeRateLimitResetCreditResponse",
     "ReasoningEffort",
     "ReasoningSummary",
     "Response",
     "ResponseFormatJsonSchema",
     "ResponseStreamEvent",
     "ResponseUsage",
-    "RealtimeCallResponse",
     "ServiceTier",
     "SyncPage",
-    "TokenDetails",
-    "Transcription",
-    "UploadedFile",
     "Verbosity",
     "image_b64",
     "image_url",

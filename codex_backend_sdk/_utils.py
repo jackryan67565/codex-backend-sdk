@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import json
 from dataclasses import asdict, is_dataclass
 from typing import Any
 
@@ -36,27 +34,6 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
-def _add_given(payload: dict[str, Any], key: str, value: Any) -> None:
-    if _is_given(value) and value is not None:
-        payload[key] = _jsonable(value)
-
-
-def _coerce_file(file: Any) -> Any:
-    if isinstance(file, tuple):
-        return file
-    if isinstance(file, (bytes, bytearray)):
-        return ("audio", bytes(file))
-    return file
-
-
-def _form_value(value: Any) -> Any:
-    if isinstance(value, (dict, list)):
-        return json.dumps(value)
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    return value
-
-
 def _default(value: Any, default: Any) -> Any:
     return default if not _is_given(value) else value
 
@@ -72,7 +49,3 @@ def _reject_backend_unsupported(**values: Any) -> None:
             "The Codex backend rejects these official Responses parameters: "
             f"{', '.join(sorted(unsupported))}."
         )
-
-
-def decode_base64_json(data: str) -> Any:
-    return json.loads(base64.b64decode(data).decode("utf-8"))

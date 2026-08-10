@@ -4,18 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Fixed
-- Removed the historical `OpenAI-Beta: responses=experimental` header from ChatGPT backend HTTP requests and identified Responses calls as `originator: codex_backend_sdk` instead of impersonating the Rust CLI.
-- Forwarded `extra_headers`, `extra_query`, and per-call `timeout` from `client.responses.create(...)` and `client.responses.parse(...)` instead of silently ignoring them.
-- Rejected attempts to override protected authentication, routing, framing, or streaming headers through Responses `extra_headers`.
+## [0.4.0] - 2026-08-09
+
+### Security
+- Contracted the public client to agent-safe stateless Responses and model discovery; removed account data, Cloud history, quota mutation, uploads, audio, images, embeddings, Realtime, and broad ChatGPT/WHAM/Platform resource namespaces.
+- Added a fail-closed method-and-route allowlist for exactly three `chatgpt.com/backend-api/codex` operations rather than trusting every path on an approved hostname.
+- Removed public credential/storage exports, interactive OAuth and callback handling, token refresh, credential writes, API-key derivation, Realtime credential-return helpers, and prepared-header access.
+- Reduced loaded credential state to a non-repr access token and account identifier; reject linked, non-regular, oversized, missing, or stale credential caches.
+- Removed caller-controlled headers, query parameters, generic request helpers, custom connection material, and hosted web-search/computer-use/MCP tools.
+- Limited automatic retries to idempotent model reads so ambiguous failures cannot replay billable Responses or compaction POSTs.
+- Bounded timeouts, model-read retry counts, and retry delays to prevent agent-controlled indefinite waits or retry amplification.
+
+### Changed
+- `authenticate()` now reuses only a current local Codex login and directs the operator to the trusted Codex CLI or ChatGPT desktop app when renewal is required.
+- Function tools remain supported because the SDK returns calls to the caller and never executes them.
+- Bumped the package to `0.4.0` for the intentionally breaking security contraction.
 
 ### Tests
-- Added final-wire coverage for the prepared Responses request, including OAuth/account headers, SSE negotiation, query and timeout forwarding, absence of the historical beta header, and case-insensitive protected-header rejection.
+- Made all credentialed/network integration tests mechanically skip unless `--live` is supplied.
+- Added negative coverage for unsafe public resources, credential exports and representations, linked auth files, stale tokens, hosted tools, caller transport controls, and every retired route family.
+- Retained final-wire, retry, typed Responses, compaction, parsing, streaming, model, and function-call coverage in the offline suite.
 
 ### Documentation
-- Reconciled authentication, Responses headers, retries, file uploads, and the application-level OpenAI hostname boundary with the current implementation.
-- Clarified that Responses history is caller-managed, Codex Cloud tasks/turns are not ChatGPT sidebar conversations, and the SDK does not expose general ChatGPT conversation history.
-- Added safe offline-versus-live test guidance and corrected runnable examples and dated backend observations.
+- Rewrote the maintained contract and wire notes around the narrow agent-safe surface, explicit non-goals, read-only authentication, live-test gate, and same-process threat-boundary caveat.
 
 ## [0.3.10] - 2026-07-17
 

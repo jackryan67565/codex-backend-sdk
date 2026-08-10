@@ -60,9 +60,6 @@ class Responses:
         top_p: Any = _UNSET,
         truncation: Any = _UNSET,
         user: Any = _UNSET,
-        extra_headers: Any = None,
-        extra_query: Any = None,
-        extra_body: Any = None,
         timeout: Any = _UNSET,
     ) -> Response | Iterator[ResponseStreamEvent]:
         _reject_backend_unsupported(
@@ -82,7 +79,6 @@ class Responses:
             top_p=top_p,
             truncation=truncation,
             user=user,
-            extra_body=extra_body,
         )
 
         if _is_given(store) and store is not False:
@@ -102,12 +98,9 @@ class Responses:
             tool_choice=tool_choice,
             tools=tools,
         )
-        response = self._client._post(
-            "/responses",
+        response = self._client._request_response(
             body=request.payload,
             stream=True,
-            headers=extra_headers,
-            params=extra_query,
             timeout=timeout,
         )
         events = stream_response_events(response)
@@ -149,9 +142,6 @@ class Responses:
         top_p: Any = _UNSET,
         truncation: Any = _UNSET,
         user: Any = _UNSET,
-        extra_headers: Any = None,
-        extra_query: Any = None,
-        extra_body: Any = None,
         timeout: Any = _UNSET,
     ) -> ParsedResponse[Any]:
         fmt = pydantic_to_format(text_format)
@@ -185,9 +175,6 @@ class Responses:
             top_p=top_p,
             truncation=truncation,
             user=user,
-            extra_headers=extra_headers,
-            extra_query=extra_query,
-            extra_body=extra_body,
             timeout=timeout,
         )
         if not isinstance(response, Response):
@@ -228,7 +215,7 @@ class Responses:
             payload["prompt_cache_key"] = prompt_cache_key
         if _is_given(text) and text is not None:
             payload["text"] = normalize_text(text)
-        data = self._client._post("/responses/compact", body=payload).json()
+        data = self._client._request_compaction(body=payload).json()
         return CompactedResponse(
             id=data.get("id", ""),
             object=data.get("object", "response.compacted"),

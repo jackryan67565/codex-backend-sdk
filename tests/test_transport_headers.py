@@ -1,11 +1,11 @@
 import json
-from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import requests
 from requests.adapters import BaseAdapter
 
-from codex_backend_sdk import OpenAI, TokenStore
+from codex_backend_sdk import OpenAI
+from codex_backend_sdk._storage import _CredentialStore
 
 
 class RecordingAdapter(BaseAdapter):
@@ -33,13 +33,12 @@ class RecordingAdapter(BaseAdapter):
 
 
 def _client_with_adapter():
-    store = TokenStore(
+    store = _CredentialStore(
         access_token="access-secret",
-        refresh_token="refresh-secret",
-        id_token_raw="id-secret",
         account_id="acct_123",
     )
-    client = OpenAI(store=store, model="gpt-test", max_retries=0)
+    client = OpenAI(model="gpt-test", max_retries=0)
+    client._CodexClient__credentials = store
     adapter = RecordingAdapter()
     client._session.mount("https://", adapter)
     return client, adapter
@@ -47,28 +46,21 @@ def _client_with_adapter():
 
 def test_responses_final_wire_headers_and_options():
     client, adapter = _client_with_adapter()
-    extra_headers = {"X-Trace-ID": "trace-123"}
 
     response = client.responses.create(
         input="ping",
-        extra_headers=extra_headers,
-        extra_query={"trace": "enabled"},
         timeout=7,
     )
 
     assert response.id == "resp_wire"
     assert adapter.request is not None
     assert adapter.request.method == "POST"
-    assert adapter.request.url.startswith(
-        "https://chatgpt.com/backend-api/codex/responses?"
-    )
-    assert parse_qs(urlsplit(adapter.request.url).query) == {"trace": ["enabled"]}
+    assert adapter.request.url == "https://chatgpt.com/backend-api/codex/responses"
     assert adapter.request.headers["Authorization"] == "Bearer access-secret"
     assert adapter.request.headers["ChatGPT-Account-ID"] == "acct_123"
     assert adapter.request.headers["originator"] == "codex_backend_sdk"
     assert adapter.request.headers["Accept"] == "text/event-stream"
     assert adapter.request.headers["Content-Type"] == "application/json"
-    assert adapter.request.headers["X-Trace-ID"] == "trace-123"
     assert "OpenAI-Beta" not in adapter.request.headers
     assert json.loads(adapter.request.body) == {
         "model": "gpt-test",
@@ -89,26 +81,14 @@ def test_responses_final_wire_headers_and_options():
     }
     assert adapter.send_kwargs["timeout"] == 7
     assert adapter.send_kwargs["stream"] is True
-    assert extra_headers == {"X-Trace-ID": "trace-123"}
 
 
-@pytest.mark.parametrize(
-    "header",
-    [
-        "Authorization",
-        "authorization",
-        "CHATGPT-ACCOUNT-ID",
-        "Originator",
-        "OpenAI-Beta",
-        "Host",
-        "Content-Length",
-        "accept",
-    ],
-)
-def test_responses_rejects_protected_header_overrides(header):
+def test_responses_does_not_accept_caller_headers_or_query():
     client, adapter = _client_with_adapter()
 
-    with pytest.raises(ValueError, match="protected backend header"):
-        client.responses.create(input="ping", extra_headers={header: "override"})
+    with pytest.raises(TypeError):
+        client.responses.create(input="ping", extra_headers={"X-Test": "unsafe"})
+    with pytest.raises(TypeError):
+        client.responses.create(input="ping", extra_query={"unsafe": "true"})
 
     assert adapter.request is None

@@ -34,24 +34,15 @@ class FakeClient(OpenAI):
         self.post_options = []
         self.gets = []
 
-    def _post(
+    def _request_response(
         self,
-        path,
         *,
         body,
         stream=False,
-        headers=None,
-        params=None,
         timeout=None,
     ):
-        self.posts.append((path, body, stream))
-        self.post_options.append((headers, params, timeout))
-        if path == "/responses/compact":
-            return FakeJSONResponse({
-                "id": "resp_123",
-                "output": [{"type": "message", "content": []}],
-                "usage": {"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
-            })
+        self.posts.append(("/responses", body, stream))
+        self.post_options.append(timeout)
         return FakeSSE([
             'data: {"type":"response.content_part.delta","delta":{"text":"hel"}}',
             "",
@@ -64,8 +55,17 @@ class FakeClient(OpenAI):
             ),
         ])
 
-    def _get_raw(self, path, *, params=None, headers=None, timeout=None):
-        self.gets.append((path, params))
+    def _request_compaction(self, *, body, timeout=None):
+        self.posts.append(("/responses/compact", body, False))
+        self.post_options.append(timeout)
+        return FakeJSONResponse({
+            "id": "resp_123",
+            "output": [{"type": "message", "content": []}],
+            "usage": {"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
+        })
+
+    def _request_models(self, *, client_version, timeout=None):
+        self.gets.append(("/models", {"client_version": client_version}))
         return FakeJSONResponse(
             {
                 "models": [
@@ -102,18 +102,15 @@ class TextOptions:
 
 
 class ParseFakeClient(FakeClient):
-    def _post(
+    def _request_response(
         self,
-        path,
         *,
         body,
         stream=False,
-        headers=None,
-        params=None,
         timeout=None,
     ):
-        self.posts.append((path, body, stream))
-        self.post_options.append((headers, params, timeout))
+        self.posts.append(("/responses", body, stream))
+        self.post_options.append(timeout)
         return FakeSSE([
             (
                 'data: {"type":"response.output_text.delta","delta":'
@@ -161,21 +158,12 @@ def test_responses_create_collects_to_pydantic_response():
     assert payload["text"] == {"verbosity": "low"}
 
 
-def test_responses_create_forwards_transport_options():
+def test_responses_create_forwards_only_timeout_transport_option():
     client = FakeClient()
-    extra_headers = {"X-Trace-ID": "trace-123"}
-    extra_query = {"trace": "enabled"}
 
-    client.responses.create(
-        input="Hi",
-        extra_headers=extra_headers,
-        extra_query=extra_query,
-        timeout=None,
-    )
+    client.responses.create(input="Hi", timeout=5)
 
-    assert client.post_options[0] == (extra_headers, extra_query, None)
-    assert extra_headers == {"X-Trace-ID": "trace-123"}
-    assert extra_query == {"trace": "enabled"}
+    assert client.post_options[0] == 5
 
 
 def test_response_exposes_tool_calls_and_reasoning_summary():
@@ -312,7 +300,11 @@ def test_responses_compact_sends_shared_request_fields():
         model="gpt-test",
         input=[{"role": "user", "content": "Long context"}],
         instructions="Compact this.",
-        tools=[{"type": "web_search"}],
+        tools=[{
+            "type": "function",
+            "name": "lookup",
+            "parameters": {"type": "object", "properties": {}},
+        }],
         parallel_tool_calls=True,
         reasoning={"effort": "medium"},
         service_tier="priority",
@@ -338,7 +330,11 @@ def test_responses_compact_sends_shared_request_fields():
                 "content": [{"type": "input_text", "text": "Long context"}],
             }
         ],
-        "tools": [{"type": "web_search"}],
+        "tools": [{
+            "type": "function",
+            "name": "lookup",
+            "parameters": {"type": "object", "properties": {}},
+        }],
         "parallel_tool_calls": True,
         "reasoning": {"effort": "medium"},
         "service_tier": "priority",
@@ -356,3 +352,35 @@ def test_responses_create_rejects_official_params_not_exposed_by_codex_backend()
         assert "temperature" in str(exc)
     else:
         raise AssertionError("temperature should be rejected before hitting the backend")
+
+
+def test_responses_rejects_hosted_and_network_capable_tools():
+    client = FakeClient()
+
+    for tool_type in ("web_search", "web_search_preview", "computer_use", "mcp"):
+        try:
+            client.responses.create(input="Hi", tools=[{"type": tool_type}])
+        except ValueError as exc:
+            assert "caller-executed function tools" in str(exc)
+        else:
+            raise AssertionError(f"{tool_type} should be rejected")
+
+    assert client.posts == []
+
+
+def test_responses_rejects_non_function_tool_choice():
+    client = FakeClient()
+    tools = [{"type": "function", "name": "lookup", "parameters": {"type": "object"}}]
+
+    try:
+        client.responses.create(
+            input="Hi",
+            tools=tools,
+            tool_choice={"type": "web_search"},
+        )
+    except ValueError as exc:
+        assert "function tool choices" in str(exc)
+    else:
+        raise AssertionError("Hosted tool choice should be rejected")
+
+    assert client.posts == []

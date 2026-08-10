@@ -5,42 +5,50 @@ from __future__ import annotations
 from urllib.parse import urlsplit
 
 
-OPENAI_DOMAIN_SUFFIXES = (
-    "chatgpt.com",
-    "openai.com",
-    "oaiusercontent.com",
-    "oaistatic.com",
-)
+# The agent-safe SDK intentionally supports only the stateless Codex Responses
+# and model-catalog routes. Host validation alone is not sufficient: a bearer
+# accepted by chatgpt.com can authorize unrelated account and workspace APIs.
+AGENT_SAFE_REQUESTS = frozenset({
+    ("GET", "chatgpt.com", "/backend-api/codex/models"),
+    ("POST", "chatgpt.com", "/backend-api/codex/responses"),
+    ("POST", "chatgpt.com", "/backend-api/codex/responses/compact"),
+})
 
 
 class OpenAINetworkPolicyError(ValueError):
-    """Raised when SDK code is asked to contact a non-OpenAI destination."""
+    """Raised when a request falls outside the exact agent-safe route policy."""
 
 
-def validate_openai_url(url: str, *, allowed_schemes: tuple[str, ...] = ("https",)) -> str:
-    """Return *url* only when it targets an approved OpenAI-operated domain."""
+def validate_agent_sdk_request(method: str, url: str) -> str:
+    """Allow only exact HTTPS method and route pairs in the agent SDK."""
     if not isinstance(url, str) or not url:
-        raise OpenAINetworkPolicyError("OpenAI destination URL must be a non-empty string")
+        raise OpenAINetworkPolicyError("Agent-safe destination URL must be a non-empty string")
 
     parsed = urlsplit(url)
     hostname = (parsed.hostname or "").rstrip(".").lower()
-    if parsed.scheme.lower() not in allowed_schemes:
-        raise OpenAINetworkPolicyError(
-            f"OpenAI destination must use {', '.join(allowed_schemes)}: {url!r}"
-        )
+    if parsed.scheme.lower() != "https":
+        raise OpenAINetworkPolicyError(f"Agent-safe destination must use HTTPS: {url!r}")
     if parsed.username is not None or parsed.password is not None:
-        raise OpenAINetworkPolicyError("OpenAI destination URL must not contain user information")
+        raise OpenAINetworkPolicyError("Agent-safe destination URL must not contain user information")
+    if parsed.fragment:
+        raise OpenAINetworkPolicyError("Agent-safe destination URL must not contain a fragment")
+    if parsed.query:
+        raise OpenAINetworkPolicyError("Agent-safe destination URL must not contain a query")
     try:
         port = parsed.port
     except ValueError as exc:
-        raise OpenAINetworkPolicyError(f"OpenAI destination has an invalid port: {url!r}") from exc
+        raise OpenAINetworkPolicyError(f"Agent-safe destination has an invalid port: {url!r}") from exc
     if port not in (None, 443):
-        raise OpenAINetworkPolicyError(f"OpenAI destination must use port 443: {url!r}")
-    if not any(
-        hostname == suffix or hostname.endswith(f".{suffix}")
-        for suffix in OPENAI_DOMAIN_SUFFIXES
-    ):
-        raise OpenAINetworkPolicyError(f"Refusing non-OpenAI network destination: {url!r}")
+        raise OpenAINetworkPolicyError(f"Agent-safe destination must use port 443: {url!r}")
+    request = (
+        method.upper(),
+        hostname,
+        parsed.path,
+    )
+    if request not in AGENT_SAFE_REQUESTS:
+        raise OpenAINetworkPolicyError(
+            f"Refusing route outside the agent-safe SDK surface: {request[0]} {url!r}"
+        )
     return url
 
 

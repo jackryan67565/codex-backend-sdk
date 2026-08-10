@@ -1,44 +1,39 @@
 import pytest
 
 from codex_backend_sdk import OpenAINetworkPolicyError
-from codex_backend_sdk._network import reject_redirect_response, validate_openai_url
+from codex_backend_sdk._network import (
+    reject_redirect_response,
+    validate_agent_sdk_request,
+)
 
 
 @pytest.mark.parametrize(
-    "url",
+    ("method", "url"),
     [
-        "https://chatgpt.com/backend-api/codex",
-        "https://api.openai.com/v1/responses",
-        "https://auth.openai.com/oauth/token",
-        "https://files.oaiusercontent.com/file-123",
-        "https://persistent.oaistatic.com/asset",
+        ("GET", "https://chatgpt.com/backend-api/codex/models"),
+        ("POST", "https://chatgpt.com/backend-api/codex/responses"),
+        ("POST", "https://chatgpt.com/backend-api/codex/responses/compact"),
     ],
 )
-def test_network_policy_accepts_openai_operated_domains(url):
-    assert validate_openai_url(url) == url
+def test_agent_request_policy_accepts_only_core_routes(method, url):
+    assert validate_agent_sdk_request(method, url) == url
 
 
 @pytest.mark.parametrize(
-    "url",
+    ("method", "url"),
     [
-        "http://api.openai.com/v1/responses",
-        "https://attacker.example/upload",
-        "https://openai.com.attacker.example/upload",
-        "https://api.openai.com:444/v1/responses",
-        "https://user@api.openai.com/v1/responses",
-        "not-a-url",
+        ("GET", "http://chatgpt.com/backend-api/codex/models"),
+        ("GET", "https://attacker.example/backend-api/codex/models"),
+        ("GET", "https://chatgpt.com.attacker.example/backend-api/codex/models"),
+        ("GET", "https://chatgpt.com:444/backend-api/codex/models"),
+        ("GET", "https://user@chatgpt.com/backend-api/codex/models"),
+        ("GET", "https://chatgpt.com/backend-api/codex/models#fragment"),
+        ("GET", "not-a-url"),
     ],
 )
-def test_network_policy_rejects_non_openai_or_unsafe_destinations(url):
+def test_network_policy_rejects_non_openai_or_unsafe_destinations(method, url):
     with pytest.raises(OpenAINetworkPolicyError):
-        validate_openai_url(url)
-
-
-def test_network_policy_allows_openai_realtime_websocket_only_explicitly():
-    url = "wss://api.openai.com/v1/realtime"
-    assert validate_openai_url(url, allowed_schemes=("wss",)) == url
-    with pytest.raises(OpenAINetworkPolicyError):
-        validate_openai_url(url)
+        validate_agent_sdk_request(method, url)
 
 
 def test_network_policy_rejects_redirect_responses():
@@ -48,3 +43,22 @@ def test_network_policy_rejects_redirect_responses():
 
     with pytest.raises(OpenAINetworkPolicyError, match="redirect"):
         reject_redirect_response(Response())
+
+
+@pytest.mark.parametrize(
+    ("method", "url"),
+    [
+        ("POST", "https://chatgpt.com/backend-api/codex/models"),
+        ("GET", "https://chatgpt.com/backend-api/memories"),
+        ("GET", "https://chatgpt.com/backend-api/user_system_messages"),
+        ("GET", "https://chatgpt.com/backend-api/wham/tasks/list"),
+        ("POST", "https://chatgpt.com/backend-api/files"),
+        ("POST", "https://chatgpt.com/backend-api/transcribe"),
+        ("POST", "https://api.openai.com/v1/embeddings"),
+        ("POST", "https://auth.openai.com/oauth/token"),
+        ("GET", "https://chatgpt.com/backend-api/codex/models?unsafe=true"),
+    ],
+)
+def test_agent_request_policy_rejects_account_upload_platform_and_auth_routes(method, url):
+    with pytest.raises(OpenAINetworkPolicyError, match="[Aa]gent-safe"):
+        validate_agent_sdk_request(method, url)

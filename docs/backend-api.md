@@ -1,686 +1,169 @@
-# Codex Backend API — Reverse-Engineering Notes
+# Agent-safe Codex backend wire notes
 
-Sourced from live observation, this repository's implementation, and
-`codex-rs` source (`openai/codex`).
-Document revised: 2026-08-09. Model, plan, and availability statements remain
-dated observations unless explicitly tied to current source.
+This document describes the current `0.4.x` SDK contract. The backend is
+undocumented and may change without notice. `README.md` remains the maintained
+user entrypoint.
 
-The maintained SDK contract is [README.md](../README.md). This document also
-records observed routes that are not exposed by the SDK; those routes are
-labeled explicitly.
+## Scope
 
----
+The SDK exposes only stateless Codex Responses and model discovery. It does not
+represent the complete ChatGPT backend and does not treat an OpenAI-owned
+hostname as blanket authorization to call every route on that host.
 
-## Base URLs
+The complete runtime allowlist is:
 
-| Path style | Base URL |
-|---|---|
-| Codex API (direct) | `https://chatgpt.com/backend-api/codex` |
-| WHAM (account/quota) | `https://chatgpt.com/backend-api` |
-| OpenAI API with Codex OAuth | `https://api.openai.com/v1` |
-| OAuth issuer | `https://auth.openai.com` |
+| Method | Scheme | Host | Path |
+|---|---|---|---|
+| `GET` | `https` | `chatgpt.com` | `/backend-api/codex/models` |
+| `POST` | `https` | `chatgpt.com` | `/backend-api/codex/responses` |
+| `POST` | `https` | `chatgpt.com` | `/backend-api/codex/responses/compact` |
 
-Implemented SDK HTTP requests require HTTPS on port 443 and an approved
-hostname suffix: `chatgpt.com`, `openai.com`, `oaiusercontent.com`, or
-`oaistatic.com`. Environment proxies and redirects are disabled. This is an
-application-level policy, not operating-system egress enforcement. The OAuth
-system browser and any caller-owned WebSocket transport are outside the SDK's
-Requests sessions.
+Only port 443 is accepted. Redirects, URL user information, fragments,
+environment proxies, caller base URLs, caller headers, and caller query
+parameters are rejected or absent from the public surface.
 
----
+Only idempotent model-catalog reads are retried. Responses and compaction POSTs
+are never replayed automatically after a timeout, connection failure, 429, or
+5xx response because the backend may already have accepted the first request.
+Timeouts must be finite and positive, are capped at ten minutes, model-read
+retries are capped at five, and each retry delay is capped at 60 seconds.
 
-## Authentication headers
+`codex_backend_sdk._network.validate_agent_sdk_request` enforces both method and
+route before `requests` opens a connection.
 
-Authenticated ChatGPT backend requests carry:
+## Authentication
 
-```
+The current client reads a pre-existing Codex credential cache and retains only:
+
+- the ChatGPT OAuth access token;
+- the ChatGPT account identifier required for backend routing.
+
+It does not retain API keys, refresh tokens, ID tokens, email addresses, plan
+details, or other account metadata in its credential object. The credential
+object suppresses the access token from `repr`.
+
+The SDK does not implement login, logout, refresh, token exchange, device code,
+browser callbacks, or credential writes. A missing or stale access token must be
+renewed by the trusted Codex CLI or ChatGPT desktop app.
+
+The shared cache is opened read-only, must be a regular non-symlink file, and is
+bounded to 1 MiB before parsing.
+
+## Request headers
+
+Every allowed backend request receives headers constructed internally:
+
+```http
 Authorization: Bearer <access_token>
 ChatGPT-Account-ID: <account_id>
-originator: codex_cli_rs
+originator: <route-specific originator>
 ```
 
-Normal HTTP requests do not send the historical
-`OpenAI-Beta: responses=experimental` header. Responses requests additionally
-identify this adapter with `originator: codex_backend_sdk` and send
-`Accept: text/event-stream`; other maintained ChatGPT routes retain their
-previous originator. The backend streams SSE even when the SDK collects those
-events into a non-streaming return value.
+Model requests use `originator: codex_cli_rs`. Responses requests use
+`originator: codex_backend_sdk`. Streaming Responses also use:
 
-- `access_token` and `account_id` come from `$CODEX_HOME/auth.json`, defaulting
-  to `~/.codex/auth.json` (written by the OAuth flow).
-- `account_id` is extracted from the `id_token` JWT claim `https://api.openai.com/auth` → `chatgpt_account_id`.
-- Tokens are obtained via ChatGPT OAuth 2.0 + PKCE (issuer: `https://auth.openai.com`, client_id: `app_EMoamEEZ73f0CkXaXp7hrann`).
-- OpenAI Platform requests use only the appropriate bearer authorization plus
-  endpoint-specific headers. OAuth token exchanges use their form/JSON headers,
-  and signed file uploads use storage-specific headers without ChatGPT tokens.
-- `POST /v1/embeddings` accepts the ChatGPT OAuth access token in observed
-  Pro-plan tests. Batch transcription was moved to the current
-  `/backend-api/transcribe` route; the former Platform transcription route is
-  retained only in version history.
+```http
+Accept: text/event-stream
+```
 
----
+Callers cannot provide or override request headers.
 
-## Codex API endpoints
+## `GET /backend-api/codex/models`
 
-### `GET /backend-api/codex/models`
+**SDK methods:**
 
-List models available to this account.
+- `client.models.list()`
+- `client.models.retrieve(model_id)`
 
-**SDK method**: `client.models.list()` / `client.models.retrieve(model)`
+The list request supplies the fixed upstream Codex client-version query used by
+the implementation. The response is converted to `Model` objects and cached for
+five minutes. `force_refresh=True` bypasses the local cache.
 
-**Query params**
-- `client_version` — Codex CLI protocol/client version string (e.g. `"0.130.0"`).
+No account, quota, task, or conversation route is consulted during model
+discovery.
 
-**Response** — JSON `{ "models": [ ModelObject, … ] }`
+## `POST /backend-api/codex/responses`
 
-The backend may include an `ETag` header. The SDK preserves it as
-`client.models.list().etag`.
+**SDK methods:**
 
-Key fields per model:
-| Field | Type | Notes |
-|---|---|---|
-| `slug` | string | Model identifier, e.g. `"gpt-5.2"`, `"gpt-5.4"` |
-| `display_name` | string | |
-| `context_window` | int | |
-| `supported_in_api` | bool | Backend exposure metadata; not an SDK usability gate |
-| `supports_reasoning_summaries` | bool | Whether `reasoning.summary` is supported |
-| `support_verbosity` | bool | |
-| `default_verbosity` | string? | |
-| `default_reasoning_level` | string? | |
-| `supported_reasoning_levels` | list | `[{ effort, description }]` |
-| `auto_compact_token_limit` | int? | Token count that triggers auto-compaction |
-| `prefer_websockets` | bool | |
-| `input_modalities` | list | e.g. `["text", "image"]` |
-| `available_in_plans` | list | e.g. `["plus", "pro", "enterprise"]` |
-| `base_instructions` | string | Default system prompt baked into the model |
-| `priority` | int | SDK currently sorts models by ascending value |
+- `client.responses.create(...)`
+- `client.responses.parse(...)`
 
-**Observed snapshot**
+The backend streams SSE. A non-streaming SDK call collects those events into a
+typed `Response`; `stream=True` returns the event iterator.
 
-- One account exposed `gpt-5.4` for inference while reporting
-  `supported_in_api: false`.
-- The same observation reported `supports_reasoning_summaries: true` and
-  `supported_in_api: true` for `gpt-5.2`.
-
-Model IDs and flags vary by account and rollout. Query `client.models.list()`;
-do not treat this snapshot as an availability guarantee. The list is cached per
-client for five minutes, and `list(force_refresh=True)` bypasses that cache.
-`retrieve(model)` searches the list rather than calling a model-specific route.
-The compatibility arguments `extra_headers`, `extra_query`, `extra_body`, and
-`timeout` are accepted by both model methods but currently ignored.
-
----
-
-### `POST /backend-api/codex/responses`
-
-Main inference endpoint. **Stream-only** — `stream: true` is mandatory; the
-backend never returns a non-streaming HTTP response. In SDK calls,
-`client.responses.create(..., stream=False)` still returns a collected
-`Response`, but this is assembled client-side from the SSE stream.
-
-**SDK method**: `client.responses.create(...)`
-
-`client.responses.parse(..., text_format=MyPydanticModel)` is a convenience
-wrapper over the same endpoint. It populates `text.format` with a strict JSON
-schema and returns `ParsedResponse`.
-
-The OpenAI-shaped `extra_headers`, `extra_query`, and per-call `timeout`
-arguments are forwarded to this endpoint. For Responses only, header names are
-checked case-insensitively and callers cannot override `Authorization`,
-`ChatGPT-Account-ID`, `originator`, `OpenAI-Beta`, `Host`, `Content-Length`, or
-the required `Accept` header. Do not assume this protected-header policy applies
-to other resources that accept `extra_headers`.
-
-**Request body** (JSON):
+The prepared payload always includes:
 
 ```json
 {
   "model": "gpt-5.4",
-  "stream": true,
+  "instructions": "",
+  "input": [],
   "tools": [],
   "tool_choice": "none",
   "parallel_tool_calls": false,
-  "input": [ /* ResponseItem list */ ],
-  "instructions": "",
   "store": false,
+  "stream": true,
   "include": []
 }
 ```
 
-`reasoning`, `text`, `service_tier`, and `prompt_cache_key` are added only when
-the caller supplies them.
+Supported optional fields are normalized before transmission. Parameters known
+to be unsupported by this backend raise locally rather than being silently
+ignored.
 
-Key fields:
-| Field | Type | Notes |
-|---|---|---|
-| `model` | string | Model slug |
-| `stream` | bool | Must be `true` |
-| `input` | list | ResponseItem list (user messages, history, tool results) |
-| `instructions` | string | System prompt |
-| `tools` | list | OpenAI function-call format |
-| `tool_choice` | string\|object | `"auto"` / `"none"` / `"required"` / `{"type":"function","name":"..."}` |
-| `parallel_tool_calls` | bool | |
-| `reasoning` | object? | `{ "effort": "minimal"\|"low"\|"medium"\|"high"\|"xhigh", "summary": "concise"\|"detailed"\|"auto" }` |
-| `text.format` | object | `{"type": "text"}` or `{"type": "json_schema", "name": "...", "schema": {...}, "strict": true}` |
-| `store` | bool | Must be `false` |
-| `service_tier` | string? | `"priority"` is accepted; `"auto"` is rejected |
-| `prompt_cache_key` | string? | Caller-selected stable key; UUID syntax is not enforced |
-| `include` | list? | Include extra fields, e.g. `["reasoning.encrypted_content"]` |
+### Stateless history
 
-**Prompt cache retention**
+The client does not use `previous_response_id`, a ChatGPT conversation ID, or a
+Codex Cloud task ID. The caller supplies prior messages, assistant outputs,
+function calls, and function results explicitly in `input`.
 
-`prompt_cache_retention` is not accepted as a request parameter on this
-endpoint. Sending either `"in_memory"` or `"24h"` returns:
+### Tools
 
-```json
-{"detail":"Unsupported parameter: prompt_cache_retention"}
-```
+Only `{"type": "function", ...}` tools are accepted. Each function requires a
+non-empty name; `parameters`, when supplied, must be a JSON-schema object.
 
-Successful SSE events currently still report:
+Allowed choices are `auto`, `none`, `required`, or an explicit function choice
+whose name exists in the supplied tool list. Hosted web-search, computer-use,
+MCP, and other backend-executed tool types are rejected before transport.
 
-```json
-"prompt_cache_retention": "24h"
-```
+The SDK does not execute returned function calls.
 
-This appears to be a backend-selected Codex policy rather than a client
-configuration knob. It is important for long sessions: with stable
-instructions, tools, schemas, and early conversation prefix, the 24h retention
-can preserve prompt-cache hits across much longer idle gaps than default
-in-memory prompt caching.
+## `POST /backend-api/codex/responses/compact`
 
-**Web search** (supplied directly in `tools`):
-```json
-{ "tools": [{ "type": "web_search_preview", "search_context_size": "medium" }] }
-```
+**SDK method:** `client.responses.compact(...)`
 
-The SDK has no `cached`/`live` search-mode convenience parameter and performs
-no local validation of backend search modes.
+Compaction accepts caller-supplied history and returns a typed compacted
+response. It shares the function-only tool restriction. It does not read any
+ChatGPT sidebar, account memory, or Codex Cloud task history.
 
-**Response** — SSE stream. Each event: `data: { ... }\n\n`
+## Intentionally removed routes and capabilities
 
-SSE event types:
-| `type` field | Meaning |
-|---|---|
-| `response.output_item.added` | New output item started |
-| `response.output_item.done` | Output item complete (message, reasoning, function_call, …) |
-| `response.output_text.delta` | Incremental text chunk (`delta`) |
-| `response.content_part.delta` | Incremental text chunk (`delta.text`) |
-| `response.content_part.done` | Text part finished |
-| `response.function_call_arguments.delta` | Tool call argument chunk |
-| `response.function_call_arguments.done` | Tool call complete |
-| `response.completed` | Stream finished; carries `usage` |
-| `response.failed` | Stream ended with error; carries `error.code` and `error.message` |
+Earlier versions recorded or exposed broader observed endpoints. Version 0.4
+removed their implementations and transport reachability from the agent-safe
+package, including:
 
-**Reasoning delivery**  
-Reasoning content is NOT delivered as streaming deltas. It arrives as a completed `response.output_item.done` event with `item.type = "reasoning"`:
-```json
-{
-  "type": "response.output_item.done",
-  "item": {
-    "type": "reasoning",
-    "summary": [{ "type": "summary_text", "text": "..." }],
-    "encrypted_content": "<opaque blob>"
-  }
-}
-```
-- `summary` is populated only when `reasoning.summary` is set and the model supports it.
-- `encrypted_content` is always present; treat as opaque.
+- ChatGPT memories and user customization;
+- WHAM usage, requirements, tasks, turns, sibling turns, and environments;
+- rate-limit reset-credit listing and consumption;
+- ChatGPT file creation, signed uploads, and upload finalization;
+- ChatGPT batch transcription;
+- Codex image generation and editing;
+- Codex Realtime call creation;
+- OpenAI Platform embeddings and Realtime WebSocket connection material;
+- OAuth authorization, refresh, and ID-token-to-API-key exchange;
+- generic raw ChatGPT, WHAM, Platform, or signed-upload transport helpers.
 
-**Usage object** (in `response.completed`):
-```json
-{
-  "input_tokens": 123,
-  "output_tokens": 45,
-  "output_tokens_details": { "reasoning_tokens": 30 },
-  "total_tokens": 168
-}
-```
+These removals are security boundaries in the maintained SDK contract, not
+claims that the upstream services ceased to exist. Historical behavior remains
+available through Git history and the append-only changelog. Frozen files under
+`docs/audits/` describe their pre-0.4 snapshot and must not be treated as current
+authority.
 
----
+## Threat-boundary note
 
-### `POST /backend-api/codex/responses/compact`
-
-Compact a long conversation into an encrypted summary the model can still read.
-
-**Request body**:
-```json
-{
-  "model": "gpt-5.4",
-  "input": [ /* full conversation history */ ],
-  "instructions": "Compact the conversation.",
-  "tools": [],
-  "parallel_tool_calls": false,
-  "reasoning": { "effort": "medium" },
-  "service_tier": "priority",
-  "prompt_cache_key": "cache-key",
-  "text": { "verbosity": "low" }
-}
-```
-
-**Response** — synchronous JSON (not SSE):
-```json
-{
-  "id": "resp_...",
-  "output": [
-    { "type": "message", "role": "user", ... },
-    { "type": "compaction_summary", "encrypted_content": "..." },
-    ...
-  ]
-}
-```
-- `output` replaces the original history; pass it as `input` in subsequent calls.
-- The `compaction_summary` item is opaque on the client side.
-
-**SDK method**: `client.responses.compact(...)`
-
----
-
-### `POST /backend-api/codex/memories/trace_summarize`
-
-Summarize traces into persistent memories.
-
-**SDK method**: `client.codex.memories.trace_summarize(...)`
-
-**Status**: Supported as a typed helper. May return `403 Forbidden` depending
-on plan/account capabilities.
-
-**Request body**:
-```json
-{
-  "model": "gpt-5.4",
-  "traces": [
-    {
-      "id": "trace_1",
-      "metadata": { "source_path": "memory.jsonl" },
-      "items": [ /* normalized trace items */ ]
-    }
-  ],
-  "reasoning": { "effort": "low" }
-}
-```
-
-**Response** — JSON `{ "output": [...] }`, exposed by the SDK as
-`MemorySummarizeResponse`.
-
----
-
-### `POST /backend-api/codex/realtime/calls`
-
-Realtime audio/video call initiation.
-
-**SDK method**: `client.realtime.calls.create(...)`
-
-**Status**: Experimental and rollout-dependent. The SDK follows the Codex
-client protocol:
-
-- plain SDP offer: `client.realtime.calls.create(sdp=offer_sdp)`
-- AVAS SDP offer plus session payload:
-  `client.realtime.calls.create(sdp=offer_sdp, session={...})`
-
-The OAuth-authenticated ChatGPT route is not enabled for every account and may
-return `404 Not Found` until Codex supplies an experimental WebRTC call base URL.
-This is distinct from the public Realtime WebSocket route, which uses a
-Realtime API key rather than the ChatGPT OAuth access token.
-
-The response exposes `.answer_sdp` and `.call_id`, while preserving the binary
-helpers `.content`, `.text`, `.read()`, `.iter_bytes()`, and
-`.write_to_file(...)`.
-
----
-
-### Realtime WebSocket helpers
-
-The `codex-agent` realtime plugin uses OpenAI Realtime WebSocket sessions while
-sharing the Codex OAuth/token store.
-
-**SDK methods**:
-
-- `client.realtime_websocket_url(model="gpt-realtime-1.5")`
-- `client.realtime.websocket_headers(session_id="...")`
-
-The URL helper returns:
-
-```text
-wss://api.openai.com/v1/realtime?model=...
-```
-
-The headers helper returns `Authorization: Bearer <openai_api_key>`, the Codex
-originator, and the optional session id. It prefers `TokenStore.openai_api_key`
-and falls back to `OPENAI_API_KEY`. Interactive ChatGPT OAuth attempts to
-exchange its fresh ID token for this distinct Realtime credential and persists
-it when the account is entitled to one. If that exchange is unavailable,
-regular Codex OAuth continues to work but Voice v2 requires a separately
-provisioned key.
-
----
-
-## Embeddings and Transcription
-
-These OpenAI-shaped resources deliberately use different upstreams. Embeddings
-remain an OpenAI Platform call and consume the associated developer-account
-quota. Batch transcription uses the authenticated ChatGPT backend and does not
-require a developer API key.
-
-### `POST /v1/embeddings`
-
-**SDK method**: `client.embeddings.create(...)`
-
-**Status**: Supported. Verified with:
-
-```json
-{
-  "model": "text-embedding-3-small",
-  "input": "ping",
-  "dimensions": 3
-}
-```
-
-The response matches the official embeddings shape:
-`{ "object": "list", "data": [{ "object": "embedding", ... }], "usage": ... }`.
-The request is accounted against the OpenAI Platform organization returned by
-the API; ChatGPT OAuth authenticates it but does not include it in a ChatGPT
-subscription.
-
-### `POST /backend-api/transcribe`
-
-**SDK method**: `client.audio.transcriptions.create(...)`
-
-**Status**: Supported for non-streaming ChatGPT batch transcription. The SDK
-uploads multipart audio with the OAuth bearer and `ChatGPT-Account-ID`, and
-supports the `model`, `language`, `prompt`, `temperature`, and `json`/`text`
-response options used by Codex Agent. Streaming, timestamps, speaker references,
-chunking, SRT, and VTT are rejected locally rather than falling back to a
-billable Platform endpoint. JSON format returns a typed `Transcription`;
-`response_format="text"` returns a string.
-
-### `POST /backend-api/codex/images/generations`
-
-**SDK method**: `client.images.generate(...)`
-
-**Status**: Supported through ChatGPT OAuth. Verified with `gpt-image-2`; the
-response contains `created` and `data[].b64_json`, plus optional effective
-`background`, `quality`, and `size` fields. Supported request fields mirror the
-current Codex client: `prompt`, `model`, `background`, `n`, `quality`, and
-`size`. This uses the Codex/ChatGPT backend rather than the OpenAI Platform
-image endpoint.
-
-### `POST /backend-api/codex/images/edits`
-
-**SDK method**: `client.images.edit(...)`
-
-**Status**: Supported through ChatGPT OAuth. Accepts one or more remote URLs or
-`data:` URLs as `images[].image_url`, plus the same prompt/model/background/count/
-quality/size controls as generation. Verified by generating a source image and
-editing it through the authenticated backend.
-
-Remote image URLs are request payload data sent to ChatGPT. This SDK does not
-fetch or validate them as local network destinations.
-
-### `POST /v1/audio/speech`
-
-**Status**: Observed but not exposed. A malformed request reaches payload
-validation, but a valid Pro-plan request currently returns `401` with missing
-`api.model.audio.request` scope.
-
----
-
-## WHAM endpoints
-
-WHAM is the ChatGPT account/quota management layer, distinct from the Codex API.
-
-### `GET /backend-api/wham/usage`
-
-Rate limits and quota for this account. Used as the auth probe — a 200 response confirms valid tokens.
-
-**SDK method**: `client.codex.usage()`
-
-**Response** — JSON:
-```json
-{
-  "plan_type": "plus",
-  "rate_limit": {
-    "allowed": true,
-    "limit_reached": false,
-    "primary_window": {
-      "used_percent": 12,
-      "limit_window_seconds": 3600,
-      "reset_after_seconds": 2847,
-      "reset_at": 1745180000
-    },
-    "secondary_window": { ... }
-  },
-  "credits": { ... },
-  "additional_rate_limits": [ ... ],
-  "rate_limit_reached_type": null
-}
-```
-
-Known `plan_type` values: `guest`, `free`, `go`, `plus`, `pro`, `prolite`, `free_workspace`, `team`, `business`, `enterprise`, `edu`, `education`, `quorum`, `k12`, `unknown`.
-
-Known `rate_limit_reached_type.type` values: `rate_limit_reached`, `workspace_owner_credits_depleted`, `workspace_member_credits_depleted`, `workspace_owner_usage_limit_reached`, `workspace_member_usage_limit_reached`.
-
----
-
-### `GET /backend-api/codex/rate-limit-reset-credits`
-
-**SDK method**: `client.codex.rate_limit_reset_credits.list()`
-
-Returns a typed detail payload containing `available_count`,
-`total_earned_count`, and credit rows with IDs, reset type, status, grant and
-expiry timestamps, title, and description. The equivalent WHAM path is also
-currently accepted by ChatGPT, but the SDK follows the active Codex client
-path.
-
-### `POST /backend-api/codex/rate-limit-reset-credits/consume`
-
-**SDK method**: `client.codex.rate_limit_reset_credits.consume(...)`
-
-Consumes a reset credit. `redeem_request_id` is required as the idempotency key;
-`credit_id` selects a specific available credit when supplied. This mutates
-account quota state and is never called implicitly by the SDK.
-
-### `GET /backend-api/wham/config/requirements`
-
-Fetch managed requirements/config for this account (plan-gated settings).
-
-**SDK method**: `client.codex.config.requirements()`
-
-**Response** — JSON config blob; schema defined in `codex-rs/cloud-requirements`.
-
----
-
-### `GET /backend-api/wham/tasks/list`
-
-List entitlement-gated Codex Cloud execution tasks.
-
-**SDK method**: `client.codex.tasks.list(...)`
-
-**Query params**: `limit`, `task_filter`, `environment_id`, `cursor`.
-
-These tasks and their turn mappings are Codex Cloud execution history. They are
-not ordinary ChatGPT sidebar conversations, and the SDK currently has no
-resource for listing or loading general ChatGPT conversation history.
-
----
-
-### `GET /backend-api/wham/tasks/{task_id}`
-
-Get details for a specific cloud task.
-
-**SDK method**: `client.codex.tasks.retrieve(task_id)`
-
-Observed response includes `task`, `current_user_turn`,
-`current_assistant_turn`, and `current_diff_task_turn`.
-
----
-
-### `GET /backend-api/wham/tasks/{task_id}/turns`
-
-List task turns as a mapping.
-
-**SDK method**: `client.codex.tasks.turns.list(task_id)`
-
-Observed response includes `turn_mapping` and `current_turn_id`.
-
----
-
-### `GET /backend-api/wham/tasks/{task_id}/turns/{turn_id}/sibling_turns`
-
-List sibling turns for a task turn.
-
-**SDK method**: `client.codex.tasks.turns.sibling_turns(task_id, turn_id)`
-
----
-
-### `GET /backend-api/wham/environments`
-
-List Codex cloud environments for the authenticated account.
-
-**SDK method**: `client.codex.environments.list()`
-
-Observed response is a raw list of environment objects, including repository
-metadata, network settings, permissions, and cache settings. Secrets are present
-as backend metadata, not plaintext values.
-
----
-
-### WebSocket: `wss://chatgpt.com/backend-api/wham/remote/control/server`
-
-**Status**: Observed, not exposed or opened by this SDK.
-
-Remote control / agent-as-a-service websocket. Observed enrollment route:
-
-`POST /backend-api/wham/remote/control/server/enroll`
-
----
-
-## ChatGPT File Uploads
-
-### `POST /backend-api/files`
-
-Create file upload metadata for Codex Apps/MCP file parameters.
-
-**SDK method**: `client.files.upload(path)`
-
-The currently observed Codex client flow is:
-
-1. `POST /backend-api/files` with `file_name`, `file_size`, and
-   `use_case: "codex"`.
-2. `PUT` the file bytes to the returned signed `upload_url`.
-3. `POST /backend-api/files/{file_id}/uploaded` until the backend returns
-   `status: "success"`.
-
-The SDK performs step 2 only for HTTPS URLs on approved OpenAI-operated domain
-families, disables redirects, and ignores environment proxy settings. A signed
-URL on any other host fails before local file bytes are read into a request. The
-local upload limit is 512 MiB.
-
-The SDK returns an `UploadedFile` object with `file_id`, canonical
-`sediment://...` URI, download URL, file name, size, MIME type, and local path.
-The returned download URL is opaque backend metadata; the SDK neither validates
-nor fetches it.
-
----
-
-## ChatGPT Account Data
-
-These endpoints are under `https://chatgpt.com/backend-api`, not
-`/backend-api/codex`. They return account-level ChatGPT data and are exposed
-under `client.codex` as raw dictionaries.
-
-This surface covers memories and customization, not ChatGPT conversation
-history.
-
-### `GET /backend-api/memories`
-
-**SDK method**: `client.codex.memories.list()`
-
-**Status**: Supported. Returns a payload shaped like:
-
-```json
-{
-  "memories": [
-    {
-      "id": "mem_...",
-      "content": "...",
-      "updated_at": "...",
-      "status": "..."
-    }
-  ],
-  "memory_max_tokens": 12000,
-  "memory_num_tokens": 123
-}
-```
-
-Memory items may include additional fields such as `conversation_id`,
-`created_timestamp`, `gizmo_id`, `last_updated`, and `labels`.
-
-### `GET /backend-api/user_system_messages`
-
-**SDK method**: `client.codex.user_system_messages.retrieve()`
-
-**Status**: Supported. Returns the raw ChatGPT customization payload, including
-fields such as `enabled`, `about_user_message`, `about_model_message`,
-`traits_model_message`, `disabled_tools`, and personality-related settings.
-
----
-
-## Input format (ResponseItem)
-
-Messages passed to `input`:
-
-**User message:**
-```json
-{ "type": "message", "role": "user", "content": [{ "type": "input_text", "text": "..." }] }
-```
-
-**Assistant message:**
-```json
-{ "type": "message", "role": "assistant", "content": [{ "type": "output_text", "text": "..." }] }
-```
-
-**Image input (URL):**
-```json
-{ "type": "input_image", "image_url": "https://..." }
-```
-
-**Image input (base64):**
-```json
-{ "type": "input_image", "image_url": "data:image/jpeg;base64,..." }
-```
-
-**Tool call (function_call):**
-Returned verbatim from `response.output_item.done` with `item.type = "function_call"`. Append raw item to history.
-
-**Tool result:**
-```json
-{ "type": "function_call_output", "call_id": "call_...", "output": "..." }
-```
-
----
-
-## Known limitations / quirks
-
-- `stream: true` is **mandatory** — there is no sync endpoint.
-- `store: false` is **mandatory**; `store: true` returns a 400.
-- `prompt_cache_retention` is server-selected (`"24h"` observed in SSE events)
-  and rejected if sent in the request body.
-- Public Responses API fields such as `temperature`, `top_p`,
-  `max_output_tokens`, `metadata`, `user`, `safety_identifier`, `truncation`,
-  penalties, and `previous_response_id` are rejected as unsupported parameters.
-- `tool_choice` field is **required** when `tools` is non-empty (omitting it causes a 400).
-- `memories/trace_summarize` returned 403 on one observed Plus account;
-  availability is account- and rollout-dependent.
-- Reasoning tokens are billed separately from output tokens.
-- The `reasoning.summary` field only populates for models with `supports_reasoning_summaries: true` (e.g. `gpt-5.2`); on other models the field is absent and only `encrypted_content` is present.
-- Model IDs, plan availability, and `supported_in_api` values are
-  account-specific observations. Query `client.models.list()` rather than
-  treating examples here as an availability guarantee.
-
-## Retry boundaries
-
-The shared HTTP transport retries `429`, `5xx`, timeout, and connection
-failures, including for POST requests. SSE failures after response consumption
-begins are not resumed. OAuth token exchanges and the signed upload `PUT` bypass
-the shared retry loop; file finalization has a separate polling loop for
-`status: "retry"`.
+The method/route allowlist constrains SDK-owned connections. It does not prevent
+arbitrary code in the same OS process from importing another HTTP library or
+reading files granted by the surrounding sandbox. Production agent hosts should
+keep credentials in a trusted broker and expose only the narrow operations the
+agent is authorized to invoke.

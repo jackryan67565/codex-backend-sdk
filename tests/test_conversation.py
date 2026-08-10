@@ -1,6 +1,10 @@
 """Multi-turn conversation with explicit Responses input items."""
 
+import pytest
+
 from codex_backend_sdk import CodexClient
+
+pytestmark = pytest.mark.live
 
 
 def _user(text: str) -> dict:
