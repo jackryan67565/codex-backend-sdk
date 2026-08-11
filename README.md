@@ -102,30 +102,34 @@ cd codex-backend-sdk
 pip install -e .
 ```
 
-### Install the current checkout in another project
+### Install the 0.5.1 wheel in another project
 
-An editable path install makes the target environment use the current checkout:
+Release artifacts are built locally into the Git-ignored `dist/` directory.
+Install the `0.5.1` wheel directly into a target project's virtual environment:
 
 ```bash
 uv pip install \
   --python /absolute/path/to/project/.venv/bin/python \
-  --editable /absolute/path/to/codex-backend-sdk
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.5.1-py3-none-any.whl
 ```
 
 Or, when that virtual environment includes pip:
 
 ```bash
 /absolute/path/to/project/.venv/bin/python -m pip install \
-  --editable /absolute/path/to/codex-backend-sdk
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.5.1-py3-none-any.whl
 ```
 
-`dist/` is intentionally Git-ignored, so a clone may not contain a wheel and a
-local artifact may trail the checked-in source. In particular, the `0.5.0`
-checkpoint predates the `gpt-5.6-sol` default and still defaults to `gpt-5.4`.
-Do not replace that artifact with different same-version contents. Build a new
-versioned checkpoint before distributing a wheel, or use the editable checkout
-until one exists. The editable checkout currently reports package version
-`0.5.0` while carrying these unreleased post-checkpoint changes.
+Because `dist/` is not tracked, a fresh clone may not contain the artifact.
+Build from the tagged checkout before local distribution, and never substitute
+different contents under the same version. For work after the checkpoint, use
+an editable path install so the target environment follows the checkout:
+
+```bash
+uv pip install \
+  --python /absolute/path/to/project/.venv/bin/python \
+  --editable /absolute/path/to/codex-backend-sdk
+```
 
 Verify an installed copy without authenticating or contacting the backend:
 

@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-11
+
 ### Added
 - Added typed `Reasoning` and `ReasoningContext` response fields for the backend-verified `current_turn` and `all_turns` modes.
 - Added an official-Responses-shaped live smoke test for structured manual-replay repair with `store=False` and `max_retries=0`.
@@ -22,6 +24,10 @@ All notable changes to this project will be documented in this file.
 
 ### Tests
 - Added offline regressions for complete output replay, structured follow-up, typed reasoning context, pre-transport limitations, usage details, and absence-preserving response collection.
+
+### Packaging
+- Bumped the local-install package and release artifacts to `0.5.1`.
+- Built and verified the wheel and source distribution from the release checkout without publishing this unofficial package to PyPI.
 
 ## [0.5.0] - 2026-08-11
 
