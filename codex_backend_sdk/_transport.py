@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import time
-from typing import Any
+from typing import Any, Mapping, Optional
 
 import requests
 
@@ -22,15 +22,29 @@ def request_with_retries(
     *,
     max_retries: int,
     retry_base_delay: float,
-    **kwargs: Any,
+    headers: Mapping[str, str],
+    timeout: float,
+    params: Optional[Mapping[str, str]] = None,
+    json_body: Optional[dict[str, Any]] = None,
+    stream: bool = False,
 ) -> requests.Response:
     validate_agent_sdk_request(method, url)
-    kwargs["allow_redirects"] = False
+    request_options: dict[str, Any] = {
+        "allow_redirects": False,
+        "headers": dict(headers),
+        "timeout": timeout,
+    }
+    if params is not None:
+        request_options["params"] = dict(params)
+    if json_body is not None:
+        request_options["json"] = json_body
+    if stream:
+        request_options["stream"] = True
     may_retry = method.upper() in {"GET", "HEAD", "OPTIONS"}
     last_error: requests.RequestException | None = None
     for attempt in range(max_retries + 1):
         try:
-            response = session.request(method, url, **kwargs)
+            response = session.request(method, url, **request_options)
             _strip_response_request_credentials(response)
             try:
                 reject_redirect_response(response)

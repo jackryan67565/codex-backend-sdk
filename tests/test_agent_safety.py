@@ -1,5 +1,6 @@
 import base64
 import importlib
+import inspect
 import json
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 import codex_backend_sdk
 from codex_backend_sdk import CodexClient
 from codex_backend_sdk._storage import _CredentialStore, _load_credentials
+from codex_backend_sdk._transport import request_with_retries
 from codex_backend_sdk.resources.models import _model_from_backend
 
 
@@ -74,6 +76,12 @@ def test_credential_repr_never_contains_access_token():
 
 def test_client_session_ignores_environment_proxies():
     assert CodexClient()._session.trust_env is False
+
+
+def test_internal_transport_does_not_accept_arbitrary_request_options():
+    parameters = inspect.signature(request_with_retries).parameters.values()
+
+    assert all(parameter.kind is not inspect.Parameter.VAR_KEYWORD for parameter in parameters)
 
 
 def test_client_context_manager_closes_owned_session(monkeypatch):

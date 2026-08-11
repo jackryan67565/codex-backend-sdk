@@ -144,7 +144,7 @@ class CodexClient:
             self._session,
             "POST",
             f"{BASE_URL}/responses",
-            json=body,
+            json_body=body,
             headers=headers,
             stream=stream,
             timeout=self._resolve_timeout(timeout),
@@ -165,7 +165,7 @@ class CodexClient:
             self._session,
             "POST",
             f"{BASE_URL}/responses/compact",
-            json=body,
+            json_body=body,
             headers={
                 "Authorization": f"Bearer {credentials._access_token}",
                 "ChatGPT-Account-ID": credentials.account_id,
