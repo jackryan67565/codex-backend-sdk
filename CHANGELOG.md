@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Added typed `Reasoning` and `ReasoningContext` response fields for the backend-verified `current_turn` and `all_turns` modes.
+- Added an official-Responses-shaped live smoke test for structured manual-replay repair with `store=False` and `max_retries=0`.
+
+### Changed
+- Preserve assistant output message `id`, `status`, and `phase` when replaying prior `response.output` items through a new request's `input`.
+- Keep returned reasoning context backend-authoritative instead of echoing a requested value when the terminal response omits it.
+- Reject unverified explicit reasoning-context values before transport while retaining the official `responses.create(...)` surface.
+
+### Documentation
+- Added a live-evidence capability matrix, measured initial/corrective usage, explicit storage and retention limits, and the boundary between CBS transport compatibility and caller-owned repair policy.
+
+### Tests
+- Added offline regressions for complete output replay, structured follow-up, typed reasoning context, pre-transport limitations, usage details, and absence-preserving response collection.
+
 ## [0.5.0] - 2026-08-11
 
 ### Changed

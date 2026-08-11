@@ -138,9 +138,61 @@ substitutes the locally requested value.
 
 ### Stateless history
 
-The client does not use `previous_response_id`, a ChatGPT conversation ID, or a
-Codex Cloud task ID. The caller supplies prior messages, assistant outputs,
-function calls, and function results explicitly in `input`.
+The client does not use a ChatGPT conversation ID or a Codex Cloud task ID.
+`previous_response_id` remains an official keyword in the public signature but
+raises locally. A 2026-08-11 probe that supplied the ID of a completed
+`store=false` response received HTTP 400 before any SSE terminal event. The
+SDK's `store=true` restriction was not relaxed to test retained server state.
+
+The supported continuation is official stateless replay: the caller supplies
+prior input, every item from `response.output`, and the next user message in a
+new `input` list. Non-message output items, including opaque reasoning items,
+pass through unchanged. Assistant messages retain `id`, `status`, `phase`,
+role, and content.
+
+### Reasoning context and structured repair
+
+Live `gpt-5.4` requests verified `reasoning.context="current_turn"` on an
+initial structured request and `reasoning.context="all_turns"` on a structured
+manual-replay follow-up. Each raw terminal event reported the corresponding
+effective context. The initial `store=false` response also contained an opaque
+reasoning output item with `encrypted_content` and an assistant message with
+`phase="final_answer"`.
+
+The adapter types the returned reasoning object, so callers can inspect
+`response.reasoning.context`. It accepts the two verified explicit values and
+rejects unverified explicit context values before transport. If the backend
+omits the response field, the SDK returns `None` rather than copying the request
+and implying reasoning reuse.
+
+Structured output remained valid on both the initial and corrective calls. CBS
+only carries the official request and response shapes; admission logic,
+validator feedback, retry decisions, and stopping policy belong to the caller.
+
+### Storage, usage, and retries
+
+Every Responses payload includes `store: false`; `store=true` raises before
+transport. The SDK does not persist response IDs, output history, or validator
+feedback, and it exposes no response retrieval or deletion route. Official
+OpenAI documentation says `store=false` disables the Platform's default 30-day
+response-object storage. This undocumented ChatGPT route received the field,
+but the SDK cannot independently audit provider-side operational retention and
+does not claim that all service logs are absent.
+
+The same live repair probe observed raw and parsed usage values:
+
+| Call | Input | Output | Reasoning | Cached |
+|---|---:|---:|---:|---:|
+| Initial structured response | 101 | 81 | 11 | 0 |
+| Corrective manual replay | 225 | 75 | 8 | 0 |
+
+Both raw terminal events explicitly contained cached-input and reasoning-token
+detail fields, and the parsed response matched them. Zero cached tokens is a
+measurement for these short prompts, not evidence that replay is discounted.
+The four instrumented capability-probe POSTs each recorded exactly one
+transport attempt with `max_retries=0`. The patched two-call smoke test also
+used `max_retries=0`; Responses POSTs remain non-retryable even when the client
+is configured with a higher model-read retry count.
 
 ### Tools
 

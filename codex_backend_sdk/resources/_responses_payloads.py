@@ -27,6 +27,7 @@ from .._utils import (
 
 
 _SUPPORTED_CREATE_SERVICE_TIERS = frozenset({"default", "priority"})
+_SUPPORTED_CREATE_REASONING_CONTEXTS = frozenset({"current_turn", "all_turns"})
 
 
 class ResponsesCreateRequest(CodexBaseModel):
@@ -85,7 +86,7 @@ class ResponsesCreateRequest(CodexBaseModel):
         if service_tier is not None:
             payload["service_tier"] = service_tier
         if reasoning is not None:
-            payload["reasoning"] = normalize_reasoning(reasoning)
+            payload["reasoning"] = _normalize_create_reasoning(reasoning)
         if text is not None:
             payload["text"] = normalize_text(text)
 
@@ -146,7 +147,7 @@ def collect_response(
         tools=raw.get("tools", request.tools),
         prompt_cache_key=raw.get("prompt_cache_key", request.prompt_cache_key),
         prompt_cache_retention=raw.get("prompt_cache_retention"),
-        reasoning=raw.get("reasoning", request.reasoning),
+        reasoning=raw.get("reasoning"),
         service_tier=raw.get("service_tier"),
         status=raw.get("status", "completed"),
         text=raw.get("text", request.text),
@@ -165,6 +166,19 @@ def _validate_create_service_tier(value: Any) -> Optional[ServiceTier]:
             "Responses; use 'default', 'priority', or omit it."
         )
     return value
+
+
+def _normalize_create_reasoning(reasoning: Any) -> dict[str, Any]:
+    normalized = normalize_reasoning(reasoning)
+    context = normalized.get("context")
+    if context is not None and not isinstance(context, str):
+        raise TypeError("reasoning.context must be 'current_turn' or 'all_turns'")
+    if context is not None and context not in _SUPPORTED_CREATE_REASONING_CONTEXTS:
+        raise CodexBackendUnsupportedParameterError(
+            f"This SDK does not support reasoning.context={context!r} for ChatGPT "
+            "Codex Responses; use 'current_turn', 'all_turns', or omit it."
+        )
+    return normalized
 
 
 def normalize_input(input_value: Any) -> list[dict[str, Any]]:
@@ -194,7 +208,11 @@ def normalize_input_item(item: Any) -> dict[str, Any]:
             {"type": "input_text", "text": part} if isinstance(part, str) else part
             for part in content
         ]
-    return _message(role, content)
+    normalized = _message(role, content)
+    for field in ("id", "status", "phase"):
+        if field in raw:
+            normalized[field] = raw[field]
+    return normalized
 
 
 def normalize_tools(tools: Any) -> list[dict[str, Any]]:
@@ -233,7 +251,7 @@ def normalize_reasoning(reasoning: Any) -> dict[str, Any]:
         return {key: value for key, value in reasoning.items() if value is not None}
     return {
         key: value
-        for key in ("effort", "summary")
+        for key in ("effort", "summary", "context")
         if (value := getattr(reasoning, key, None)) is not None
     }
 

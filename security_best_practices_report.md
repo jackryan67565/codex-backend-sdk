@@ -112,7 +112,7 @@ seconds; non-idempotent requests remain non-retryable
 
 ## Verification evidence
 
-- Offline suite: `104 passed, 11 skipped`.
+- Offline suite: `112 passed, 12 skipped`.
 - Python compilation completed for `codex_backend_sdk` and `tests`.
 - `git diff --check` completed without whitespace errors.
 - Source URL scan found one connection base:

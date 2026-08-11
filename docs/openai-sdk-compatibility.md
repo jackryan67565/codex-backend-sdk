@@ -60,6 +60,42 @@ event and remains `None` when that event omits the field.
 This matrix does not cover `responses.compact(...)`; its existing field remains
 unchanged pending separate endpoint verification.
 
+### Repair-iteration capability matrix
+
+OpenAI's official [conversation-state
+guide](https://developers.openai.com/api/docs/guides/conversation-state) defines
+both stored `previous_response_id` chaining and stateless manual replay. The
+official [reasoning
+guide](https://developers.openai.com/api/docs/guides/reasoning#preserve-reasoning-across-calls)
+requires complete output replay when `store=false`, including encrypted
+reasoning items and assistant phase.
+
+The following Codex observations are from a bounded live `gpt-5.4` probe on
+2026-08-11. Each POST used `store=false`, `max_retries=0`, and exactly one
+transport attempt.
+
+| Capability | Codex result | Public contract |
+|---|---|---|
+| `previous_response_id` | HTTP 400 with a prior `store=false` response ID; no terminal SSE event | Keyword remains in `responses.create(...)` but raises locally; no stateful emulation |
+| Prior `response.output` items in `input` | Supported; replay included reasoning and assistant message items | Use ordinary `input=[*previous_input, *previous.output, feedback]` |
+| Structured output on follow-up | Supported; corrective output validated against the same strict JSON schema | Use ordinary `text.format` or `responses.parse(...)` |
+| `reasoning.context` | `current_turn` and `all_turns` accepted and reported as effective raw response values | Use the standard `reasoning` parameter and inspect typed `response.reasoning.context` |
+| `store=false` continuation | Supported only through complete manual replay | No server-state or response-ID reuse claim |
+| Cached-input usage | Raw detail field present; measured 0 on both short calls | Exposed as `usage.input_tokens_details.cached_tokens` |
+| Reasoning-token usage | Raw detail field present; measured 11 initially and 8 on correction | Exposed as `usage.output_tokens_details.reasoning_tokens` |
+
+The initial call measured 101 input / 81 output / 182 total tokens. The
+corrective replay measured 225 input / 75 output / 300 total tokens. This sample
+showed no cached-input discount, so CBS must not advertise token savings.
+Provider-side caching may vary with prompt length and backend policy; the raw
+usage response is authoritative.
+
+Every request carried `store=false`. The SDK neither stores the repair history
+nor exposes retrieval/deletion. Official Platform documentation describes
+response objects as stored for 30 days by default unless `store=false`; this
+adapter can confirm the wire request but cannot independently prove all
+operational retention behavior of the undocumented ChatGPT backend.
+
 ## Intentional incompatibilities
 
 These differences are part of the security contract rather than accidental
@@ -77,6 +113,9 @@ API drift:
   and output items themselves.
 - The official Platform's broader service-tier vocabulary is intentionally
   narrowed to the create-route values verified above.
+- Explicit `reasoning.context="auto"` remains unverified on this backend;
+  omission is available, while the verified `current_turn` and `all_turns`
+  values are supported.
 
 ## Current parity snapshot
 
@@ -123,3 +162,5 @@ they must never weaken the agent-safe boundary.
    model, or streaming behavior. Compare against a pinned `openai-python`
    version during an intentional compatibility update; do not make the official
    package a runtime dependency merely for parity checks.
+6. Keep repair validation, retry/stopping policy, experiment orchestration, and
+   custody records outside CBS. Do not add a proprietary continuation method.

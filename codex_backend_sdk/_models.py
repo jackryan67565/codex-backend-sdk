@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 ReasoningEffort = Literal["minimal", "low", "medium", "high", "xhigh"]
 ReasoningSummary = Literal["concise", "detailed", "auto"]
+ReasoningContext = Literal["current_turn", "all_turns"]
 Verbosity = Literal["low", "medium", "high"]
 ServiceTier = Literal["default", "priority"]
 ParsedT = TypeVar("ParsedT")
@@ -60,6 +61,12 @@ class CodexBaseModel(BaseModel):
         return getattr(self, key)
 
 
+class Reasoning(CodexBaseModel):
+    context: Optional[ReasoningContext] = None
+    effort: Optional[ReasoningEffort] = None
+    summary: Optional[ReasoningSummary] = None
+
+
 class TokenDetails(CodexBaseModel):
     cached_tokens: int = 0
     reasoning_tokens: int = 0
@@ -105,7 +112,7 @@ class Response(CodexBaseModel):
     prompt: Any = None
     prompt_cache_key: Optional[str] = None
     prompt_cache_retention: Optional[str] = None
-    reasoning: Any = None
+    reasoning: Optional[Reasoning] = None
     safety_identifier: Optional[str] = None
     service_tier: Optional[str] = None
     status: Optional[str] = "completed"
@@ -167,6 +174,10 @@ class ParsedResponse(CodexBaseModel, Generic[ParsedT]):
     @property
     def usage(self) -> Optional[ResponseUsage]:
         return self.response.usage
+
+    @property
+    def reasoning(self) -> Optional[Reasoning]:
+        return self.response.reasoning
 
 
 class ResponseStreamEvent(CodexBaseModel):

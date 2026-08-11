@@ -7,6 +7,8 @@ from codex_backend_sdk import (
     CodexBackendUnsupportedParameterError,
     CodexClient,
     OpenAI,
+    Reasoning,
+    ReasoningContext,
     Response,
     ResponseStreamEvent,
     ServiceTier,
@@ -34,6 +36,7 @@ def test_responses_create_keeps_supported_official_keyword_names():
         "max_output_tokens",
         "model",
         "parallel_tool_calls",
+        "previous_response_id",
         "reasoning",
         "service_tier",
         "store",
@@ -51,10 +54,18 @@ def test_service_tier_type_matches_the_verified_backend_subset():
     assert get_args(ServiceTier) == ("default", "priority")
 
 
+def test_reasoning_context_uses_the_verified_official_field_shape():
+    assert get_args(ReasoningContext) == ("current_turn", "all_turns")
+    reasoning = Reasoning(context="all_turns", effort="low")
+
+    assert reasoning.context == "all_turns"
+    assert reasoning.effort == "low"
+
+
 def test_nonstandard_custody_lifecycle_is_not_on_primary_surface():
     client = OpenAI()
 
-    for name in ("prepare", "send", "validate"):
+    for name in ("continue_from", "prepare", "send", "validate"):
         assert not hasattr(client.responses, name)
     assert not hasattr(client, "capabilities")
     assert "receipt" not in Response.model_fields

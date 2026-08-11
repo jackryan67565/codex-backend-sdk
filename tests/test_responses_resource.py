@@ -7,6 +7,7 @@ from codex_backend_sdk import (
     CodexBackendUnsupportedParameterError,
     OpenAI,
     ParsedResponse,
+    Reasoning,
     Response,
 )
 
@@ -164,6 +165,41 @@ class TierReportingFakeClient(FakeClient):
         return self.last_response
 
 
+class ReasoningContextFakeClient(FakeClient):
+    def _request_response(
+        self,
+        *,
+        body,
+        stream=False,
+        timeout=None,
+    ):
+        self.posts.append(("/responses", body, stream))
+        self.post_options.append(timeout)
+        self.last_response = FakeSSE([
+            (
+                'data: {"type":"response.output_item.done","item":'
+                '{"type":"reasoning","encrypted_content":"opaque",'
+                '"summary":[]}}'
+            ),
+            "",
+            (
+                'data: {"type":"response.output_item.done","item":'
+                '{"type":"message","role":"assistant","phase":"final_answer",'
+                '"content":[{"type":"output_text","text":"done"}]}}'
+            ),
+            "",
+            (
+                'data: {"type":"response.completed","response":'
+                '{"id":"resp_reasoning","model":"gpt-test","status":"completed",'
+                '"reasoning":{"effort":"low","context":"all_turns"},'
+                '"usage":{"input_tokens":225,"output_tokens":75,"total_tokens":300,'
+                '"input_tokens_details":{"cached_tokens":0},'
+                '"output_tokens_details":{"reasoning_tokens":8}}}}'
+            ),
+        ])
+        return self.last_response
+
+
 def test_responses_create_collects_to_pydantic_response():
     client = FakeClient()
 
@@ -224,6 +260,55 @@ def test_responses_create_uses_the_backend_reported_tier_not_the_request():
     assert response.service_tier == "default"
 
 
+def test_responses_create_exposes_backend_reported_reasoning_context_and_usage():
+    client = ReasoningContextFakeClient()
+
+    response = client.responses.create(
+        input="Repair this",
+        reasoning={"effort": "low", "context": "all_turns"},
+    )
+
+    assert isinstance(response.reasoning, Reasoning)
+    assert response.reasoning.context == "all_turns"
+    assert response.reasoning.effort == "low"
+    assert response.usage.input_tokens_details.cached_tokens == 0
+    assert response.usage.output_tokens_details.reasoning_tokens == 8
+    assert client.posts[0][1]["reasoning"] == {
+        "effort": "low",
+        "context": "all_turns",
+    }
+
+
+def test_responses_create_does_not_echo_unreported_reasoning_context():
+    client = FakeClient()
+
+    response = client.responses.create(
+        input="Repair this",
+        reasoning={"effort": "low", "context": "current_turn"},
+    )
+
+    assert response.reasoning is None
+
+
+@pytest.mark.parametrize("context", ["auto", "future_mode"])
+def test_responses_create_rejects_unverified_reasoning_context_before_transport(context):
+    client = FakeClient()
+
+    with pytest.raises(CodexBackendUnsupportedParameterError, match="reasoning.context"):
+        client.responses.create(input="Hi", reasoning={"context": context})
+
+    assert client.posts == []
+
+
+def test_responses_create_rejects_non_string_reasoning_context_before_transport():
+    client = FakeClient()
+
+    with pytest.raises(TypeError, match="reasoning.context"):
+        client.responses.create(input="Hi", reasoning={"context": ["all_turns"]})
+
+    assert client.posts == []
+
+
 @pytest.mark.parametrize("service_tier", ["auto", "flex", "fast", "standard", "unknown"])
 def test_responses_create_rejects_unverified_service_tiers_before_transport(service_tier):
     client = FakeClient()
@@ -251,6 +336,66 @@ def test_responses_parse_inherits_create_service_tier_validation():
             input="Extract",
             text_format=ParsedPerson,
             service_tier="fast",
+        )
+
+    assert client.posts == []
+
+
+def test_responses_parse_supports_structured_manual_output_replay():
+    client = ParseFakeClient()
+    prior_output = [
+        {
+            "type": "reasoning",
+            "encrypted_content": "opaque",
+            "summary": [],
+        },
+        {
+            "type": "message",
+            "id": "msg_previous",
+            "role": "assistant",
+            "status": "completed",
+            "phase": "final_answer",
+            "content": [{"type": "output_text", "text": "candidate"}],
+        },
+    ]
+    replay = [
+        {"role": "user", "content": "Initial request"},
+        *prior_output,
+        {"role": "user", "content": "Admission scar"},
+    ]
+
+    parsed = client.responses.parse(
+        input=replay,
+        text_format=ParsedPerson,
+        reasoning={"context": "all_turns"},
+        store=False,
+    )
+
+    assert parsed.output_parsed == ParsedPerson(name="Ada", age=37)
+    assert client.posts[0][1]["input"] == [
+        {
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_text", "text": "Initial request"}],
+        },
+        *prior_output,
+        {
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_text", "text": "Admission scar"}],
+        },
+    ]
+    assert client.posts[0][1]["reasoning"] == {"context": "all_turns"}
+    assert client.posts[0][1]["store"] is False
+
+
+def test_responses_create_keeps_previous_response_id_as_explicit_local_limitation():
+    client = FakeClient()
+
+    with pytest.raises(CodexBackendUnsupportedParameterError, match="previous_response_id"):
+        client.responses.create(
+            input="Admission scar",
+            previous_response_id="resp_not_stored",
         )
 
     assert client.posts == []

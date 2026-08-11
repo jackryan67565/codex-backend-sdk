@@ -189,8 +189,10 @@ them locally instead of silently translating or transmitting them. This
 create/parse finding does not establish the compaction route's behavior.
 
 Responses are caller-managed and stateless. The SDK does not create, list, or
-resume ChatGPT UI conversations and the backend does not expose
-`previous_response_id` through this client.
+resume ChatGPT UI conversations. Although `previous_response_id` remains in the
+official-compatible method signature, this client rejects it locally: a live
+probe using the SDK's mandatory `store=False` mode reached the backend and
+received HTTP 400. The SDK does not emulate server-side continuation.
 
 ## Streaming
 
@@ -212,13 +214,34 @@ Pass prior input and output explicitly:
 
 ```python
 history = [{"role": "user", "content": "My name is Alice. Say OK."}]
-first = client.responses.create(input=history)
+first = client.responses.create(
+    input=history,
+    reasoning={"context": "current_turn"},
+    store=False,
+)
 
 history.extend(first.output)
 history.append({"role": "user", "content": "What is my name?"})
-second = client.responses.create(input=history)
+second = client.responses.create(
+    input=history,
+    reasoning={"context": "all_turns"},
+    store=False,
+)
 print(second.output_text)
 ```
+
+Complete output replay preserves opaque encrypted reasoning items plus standard
+assistant message `id`, `status`, and `phase` fields. This is the supported
+repair-iteration primitive: the host can append a compact validator result and
+request another structured response using the ordinary `responses.create(...)`
+shape. CBS does not validate candidates, decide whether to retry, or claim that
+replayed tokens were cached.
+
+On a minimal `gpt-5.4` structured repair probe, the initial call reported 101
+input, 81 output, 11 reasoning, and 0 cached tokens. The corrective manual
+replay reported 225 input, 75 output, 8 reasoning, and 0 cached tokens. Both
+used one transport attempt with `max_retries=0`. These measurements demonstrate
+usage reporting, not token savings.
 
 ## Function calling
 
@@ -319,6 +342,7 @@ python -m pytest --live -q \
   tests/test_basic.py \
   tests/test_conversation.py \
   tests/test_reasoning.py \
+  tests/test_repair_iteration.py \
   tests/test_structured_output.py \
   tests/test_tools.py
 ```
