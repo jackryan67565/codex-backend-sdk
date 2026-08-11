@@ -12,6 +12,7 @@ from ._network import reject_redirect_response, validate_agent_sdk_request
 
 
 _MAX_RETRY_DELAY_SECONDS = 60.0
+_SENSITIVE_REQUEST_HEADERS = ("Authorization", "ChatGPT-Account-ID")
 
 
 def request_with_retries(
@@ -30,6 +31,7 @@ def request_with_retries(
     for attempt in range(max_retries + 1):
         try:
             response = session.request(method, url, **kwargs)
+            _strip_response_request_credentials(response)
             reject_redirect_response(response)
             if may_retry and should_retry_response(response, attempt, max_retries=max_retries):
                 sleep_before_retry(response, attempt, retry_base_delay=retry_base_delay)
@@ -37,6 +39,7 @@ def request_with_retries(
             response.raise_for_status()
             return response
         except (requests.Timeout, requests.ConnectionError) as exc:
+            _strip_exception_request_credentials(exc)
             last_error = exc
             if not may_retry or attempt >= max_retries:
                 raise
@@ -44,6 +47,25 @@ def request_with_retries(
     if last_error is not None:
         raise last_error
     raise RuntimeError("Request retry loop exhausted")
+
+
+def _strip_response_request_credentials(response: requests.Response) -> None:
+    _strip_request_credentials(getattr(response, "request", None))
+
+
+def _strip_exception_request_credentials(exc: requests.RequestException) -> None:
+    _strip_request_credentials(getattr(exc, "request", None))
+    response = getattr(exc, "response", None)
+    if response is not None:
+        _strip_response_request_credentials(response)
+
+
+def _strip_request_credentials(request: object) -> None:
+    headers = getattr(request, "headers", None)
+    if headers is None:
+        return
+    for name in _SENSITIVE_REQUEST_HEADERS:
+        headers.pop(name, None)
 
 
 def should_retry_response(

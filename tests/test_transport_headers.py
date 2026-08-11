@@ -11,10 +11,12 @@ from codex_backend_sdk._storage import _CredentialStore
 class RecordingAdapter(BaseAdapter):
     def __init__(self):
         self.request = None
+        self.wire_headers = None
         self.send_kwargs = None
 
     def send(self, request, **kwargs):
         self.request = request
+        self.wire_headers = dict(request.headers)
         self.send_kwargs = kwargs
         response = requests.Response()
         response.status_code = 200
@@ -56,12 +58,14 @@ def test_responses_final_wire_headers_and_options():
     assert adapter.request is not None
     assert adapter.request.method == "POST"
     assert adapter.request.url == "https://chatgpt.com/backend-api/codex/responses"
-    assert adapter.request.headers["Authorization"] == "Bearer access-secret"
-    assert adapter.request.headers["ChatGPT-Account-ID"] == "acct_123"
-    assert adapter.request.headers["originator"] == "codex_backend_sdk"
-    assert adapter.request.headers["Accept"] == "text/event-stream"
-    assert adapter.request.headers["Content-Type"] == "application/json"
-    assert "OpenAI-Beta" not in adapter.request.headers
+    assert adapter.wire_headers["Authorization"] == "Bearer access-secret"
+    assert adapter.wire_headers["ChatGPT-Account-ID"] == "acct_123"
+    assert adapter.wire_headers["originator"] == "codex_backend_sdk"
+    assert adapter.wire_headers["Accept"] == "text/event-stream"
+    assert adapter.wire_headers["Content-Type"] == "application/json"
+    assert "OpenAI-Beta" not in adapter.wire_headers
+    assert "Authorization" not in adapter.request.headers
+    assert "ChatGPT-Account-ID" not in adapter.request.headers
     assert json.loads(adapter.request.body) == {
         "model": "gpt-test",
         "instructions": "",
