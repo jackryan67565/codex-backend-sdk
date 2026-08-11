@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-10
+
 ### Security
 - Removed bearer and account-routing headers from retained Requests objects before successful responses or transport failures escape the internal transport, while preserving existing exception classes and retry behavior.
 - Replaced the internal transport's arbitrary Requests keyword forwarding with an explicit, closed set of request options.
@@ -13,6 +15,10 @@ All notable changes to this project will be documented in this file.
 
 ### Tests
 - Added a synthetic offline matrix covering HTTP status, redirect, timeout, and connection failures across Models, Responses, and Compaction, including wire-header presence followed by retained-object sanitization.
+
+### Packaging
+- Refreshed package metadata and the lockfile for a local-install checkpoint.
+- Verified the wheel by installing it into a fresh isolated virtual environment and importing the packaged client.
 
 ## [0.4.0] - 2026-08-09
 

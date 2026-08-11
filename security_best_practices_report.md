@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-The `0.4.0` worktree has been contracted from a broad ChatGPT backend SDK to a
+The `0.4.1` worktree has been contracted from a broad ChatGPT backend SDK to a
 narrow agent-use client. Repository-managed connections are limited to Codex
 model discovery, Responses, and Responses compaction. Credential lifecycle,
 account data, Cloud history, state mutation, arbitrary uploads, Platform APIs,

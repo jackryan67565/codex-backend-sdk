@@ -90,6 +90,28 @@ pip install -e .
 Installing packages can contact the package index configured for the local
 environment. Package installation is outside the SDK runtime network contract.
 
+### Install the local wheel in another project
+
+Release checkpoints are built into `dist/`. Install the wheel directly into a
+project's virtual environment without publishing this unofficial package:
+
+```bash
+uv pip install \
+  --python /absolute/path/to/project/.venv/bin/python \
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.4.1-py3-none-any.whl
+```
+
+Or, when that virtual environment includes pip:
+
+```bash
+/absolute/path/to/project/.venv/bin/python -m pip install \
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.4.1-py3-none-any.whl
+```
+
+The target environment must also satisfy the wheel's `pydantic>=2.0` and
+`requests>=2.28` dependencies. An installer may contact its configured package
+index when those dependencies are not already available locally.
+
 ## Authentication
 
 Sign in using the trusted Codex CLI or ChatGPT desktop app first. The SDK reuses
