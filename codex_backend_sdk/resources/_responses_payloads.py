@@ -14,9 +14,19 @@ from .._models import (
     ResponseFormatJsonSchema,
     ResponseStreamEvent,
     ResponseUsage,
+    ServiceTier,
     TokenDetails,
 )
-from .._utils import _UNSET, _default, _is_given, _jsonable
+from .._utils import (
+    _UNSET,
+    CodexBackendUnsupportedParameterError,
+    _default,
+    _is_given,
+    _jsonable,
+)
+
+
+_SUPPORTED_CREATE_SERVICE_TIERS = frozenset({"default", "priority"})
 
 
 class ResponsesCreateRequest(CodexBaseModel):
@@ -27,7 +37,7 @@ class ResponsesCreateRequest(CodexBaseModel):
     parallel_tool_calls: bool
     prompt_cache_key: Optional[str]
     reasoning: Any
-    service_tier: Optional[str]
+    service_tier: Optional[ServiceTier]
     text: Any
     tool_choice: Any
     tools: list[dict[str, Any]]
@@ -69,7 +79,7 @@ class ResponsesCreateRequest(CodexBaseModel):
         prompt_cache_key = (
             None if not _is_given(params["prompt_cache_key"]) else params["prompt_cache_key"]
         )
-        service_tier = None if not _is_given(params["service_tier"]) else params["service_tier"]
+        service_tier = _validate_create_service_tier(params["service_tier"])
         if prompt_cache_key is not None:
             payload["prompt_cache_key"] = prompt_cache_key
         if service_tier is not None:
@@ -137,11 +147,24 @@ def collect_response(
         prompt_cache_key=raw.get("prompt_cache_key", request.prompt_cache_key),
         prompt_cache_retention=raw.get("prompt_cache_retention"),
         reasoning=raw.get("reasoning", request.reasoning),
-        service_tier=raw.get("service_tier", request.service_tier),
+        service_tier=raw.get("service_tier"),
         status=raw.get("status", "completed"),
         text=raw.get("text", request.text),
         usage=_usage_from_backend(raw.get("usage")),
     )
+
+
+def _validate_create_service_tier(value: Any) -> Optional[ServiceTier]:
+    if not _is_given(value) or value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError("service_tier must be 'default' or 'priority'")
+    if value not in _SUPPORTED_CREATE_SERVICE_TIERS:
+        raise CodexBackendUnsupportedParameterError(
+            f"This SDK does not support service_tier={value!r} for ChatGPT Codex "
+            "Responses; use 'default', 'priority', or omit it."
+        )
+    return value
 
 
 def normalize_input(input_value: Any) -> list[dict[str, Any]]:

@@ -5,7 +5,7 @@ discovery. It does not export credential objects, raw transports, account data,
 uploads, Realtime connection material, or state-changing ChatGPT resources.
 """
 
-__version__ = "0.4.1"
+__version__ = "0.5.0"
 
 from ._network import OpenAINetworkPolicyError
 from .codex_client import (

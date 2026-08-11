@@ -35,6 +35,31 @@ The official reference demonstrates the same `OpenAI()` client,
   not support. `max_output_tokens` must raise and must never be silently dropped
   or reinterpreted.
 
+### Service-tier subset
+
+Official OpenAI documentation describes `auto`, `default`, `flex`, and Fast
+mode through either `fast` or `priority`. The undocumented ChatGPT Codex route
+does not currently expose the same subset:
+
+| Value | Official Platform contract | Verified Codex Responses behavior |
+|---|---|---|
+| omitted | Behaves as project-configured `auto` | Accepted; observed terminal tier `default` |
+| `auto` | Project-configured tier | HTTP 400; rejected locally by this adapter |
+| `default` | Standard processing | Accepted; observed terminal tier `default` |
+| `flex` | Flex processing | HTTP 400; rejected locally by this adapter |
+| `priority` | Fast-mode request alias | Accepted, but observed terminal tier `default` |
+| `fast` | Fast-mode request | HTTP 400; rejected locally by this adapter |
+
+The Codex observations are one minimal live request per value on 2026-08-11
+using `gpt-5.4`; they are not Platform guarantees or latency benchmarks.
+`responses.create(...)` and `responses.parse(...)` therefore type and accept
+only `default` and `priority`, plus omission. They never translate an unsupported
+value. A returned `Response.service_tier` reflects only the terminal backend
+event and remains `None` when that event omits the field.
+
+This matrix does not cover `responses.compact(...)`; its existing field remains
+unchanged pending separate endpoint verification.
+
 ## Intentional incompatibilities
 
 These differences are part of the security contract rather than accidental
@@ -50,6 +75,8 @@ API drift:
   rejected or absent.
 - Stateful Platform response chaining is unavailable; callers carry prior input
   and output items themselves.
+- The official Platform's broader service-tier vocabulary is intentionally
+  narrowed to the create-route values verified above.
 
 ## Current parity snapshot
 

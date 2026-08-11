@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
-from .._models import CompactedResponse, ParsedResponse, Response, ResponseStreamEvent
+from .._models import (
+    CompactedResponse,
+    ParsedResponse,
+    Response,
+    ResponseStreamEvent,
+    ServiceTier,
+)
 from .._streaming import stream_response_events
 from .._utils import _UNSET, _default, _is_given, _reject_backend_unsupported
 from ._responses_payloads import (
@@ -48,7 +54,7 @@ class Responses:
         prompt_cache_retention: Any = _UNSET,
         reasoning: Any = _UNSET,
         safety_identifier: Any = _UNSET,
-        service_tier: Any = _UNSET,
+        service_tier: Optional[ServiceTier] = _UNSET,
         store: Any = _UNSET,
         stream: Any = _UNSET,
         stream_options: Any = _UNSET,
@@ -131,7 +137,7 @@ class Responses:
         prompt_cache_retention: Any = _UNSET,
         reasoning: Any = _UNSET,
         safety_identifier: Any = _UNSET,
-        service_tier: Any = _UNSET,
+        service_tier: Optional[ServiceTier] = _UNSET,
         store: Any = _UNSET,
         stream_options: Any = _UNSET,
         temperature: Any = _UNSET,

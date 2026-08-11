@@ -1,8 +1,14 @@
 from dataclasses import dataclass
 
+import pytest
 from pydantic import BaseModel
 
-from codex_backend_sdk import OpenAI, ParsedResponse, Response
+from codex_backend_sdk import (
+    CodexBackendUnsupportedParameterError,
+    OpenAI,
+    ParsedResponse,
+    Response,
+)
 
 
 class FakeSSE:
@@ -138,6 +144,26 @@ class ParseFakeClient(FakeClient):
         return self.last_response
 
 
+class TierReportingFakeClient(FakeClient):
+    def _request_response(
+        self,
+        *,
+        body,
+        stream=False,
+        timeout=None,
+    ):
+        self.posts.append(("/responses", body, stream))
+        self.post_options.append(timeout)
+        self.last_response = FakeSSE([
+            (
+                'data: {"type":"response.completed","response":'
+                '{"id":"resp_tier","model":"gpt-test",'
+                '"status":"completed","service_tier":"default"}}'
+            ),
+        ])
+        return self.last_response
+
+
 def test_responses_create_collects_to_pydantic_response():
     client = FakeClient()
 
@@ -177,6 +203,57 @@ def test_responses_create_forwards_only_timeout_transport_option():
     client.responses.create(input="Hi", timeout=5)
 
     assert client.post_options[0] == 5
+
+
+@pytest.mark.parametrize("service_tier", ["default", "priority"])
+def test_responses_create_forwards_verified_service_tiers(service_tier):
+    client = FakeClient()
+
+    response = client.responses.create(input="Hi", service_tier=service_tier)
+
+    assert client.posts[0][1]["service_tier"] == service_tier
+    assert response.service_tier is None
+
+
+def test_responses_create_uses_the_backend_reported_tier_not_the_request():
+    client = TierReportingFakeClient()
+
+    response = client.responses.create(input="Hi", service_tier="priority")
+
+    assert client.posts[0][1]["service_tier"] == "priority"
+    assert response.service_tier == "default"
+
+
+@pytest.mark.parametrize("service_tier", ["auto", "flex", "fast", "standard", "unknown"])
+def test_responses_create_rejects_unverified_service_tiers_before_transport(service_tier):
+    client = FakeClient()
+
+    with pytest.raises(CodexBackendUnsupportedParameterError, match="service_tier"):
+        client.responses.create(input="Hi", service_tier=service_tier)
+
+    assert client.posts == []
+
+
+def test_responses_create_rejects_non_string_service_tier_before_transport():
+    client = FakeClient()
+
+    with pytest.raises(TypeError, match="service_tier"):
+        client.responses.create(input="Hi", service_tier=1)
+
+    assert client.posts == []
+
+
+def test_responses_parse_inherits_create_service_tier_validation():
+    client = ParseFakeClient()
+
+    with pytest.raises(CodexBackendUnsupportedParameterError, match="service_tier"):
+        client.responses.parse(
+            input="Extract",
+            text_format=ParsedPerson,
+            service_tier="fast",
+        )
+
+    assert client.posts == []
 
 
 def test_response_exposes_tool_calls_and_reasoning_summary():

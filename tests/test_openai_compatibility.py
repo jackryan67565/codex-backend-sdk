@@ -1,4 +1,5 @@
 import inspect
+from typing import get_args
 
 import pytest
 
@@ -8,6 +9,7 @@ from codex_backend_sdk import (
     OpenAI,
     Response,
     ResponseStreamEvent,
+    ServiceTier,
 )
 from codex_backend_sdk.resources.responses import Responses
 
@@ -43,6 +45,10 @@ def test_responses_create_keeps_supported_official_keyword_names():
     }
 
     assert expected <= set(parameters)
+
+
+def test_service_tier_type_matches_the_verified_backend_subset():
+    assert get_args(ServiceTier) == ("default", "priority")
 
 
 def test_nonstandard_custody_lifecycle_is_not_on_primary_surface():

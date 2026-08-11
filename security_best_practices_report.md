@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-The `0.4.1` worktree has been contracted from a broad ChatGPT backend SDK to a
+The `0.5.0` worktree has been contracted from a broad ChatGPT backend SDK to a
 narrow agent-use client. Repository-managed connections are limited to Codex
 model discovery, Responses, and Responses compaction. Credential lifecycle,
 account data, Cloud history, state mutation, arbitrary uploads, Platform APIs,
@@ -112,7 +112,7 @@ seconds; non-idempotent requests remain non-retryable
 
 ## Verification evidence
 
-- Offline suite: `93 passed, 11 skipped`.
+- Offline suite: `104 passed, 11 skipped`.
 - Python compilation completed for `codex_backend_sdk` and `tests`.
 - `git diff --check` completed without whitespace errors.
 - Source URL scan found one connection base:

@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-11
+
+### Changed
+- Narrowed `responses.create(...)` and `responses.parse(...)` service-tier support to the live-verified `default` and `priority` values; omitted tiers remain omitted from the request body.
+- Reject `auto`, `flex`, `fast`, non-string, and unknown tier values before transport rather than silently translating or forwarding them to a backend that returned HTTP 400 during verification.
+- Preserve uncertainty when a terminal event omits `service_tier` by returning `None` instead of echoing the requested tier.
+- Left compaction service-tier handling unchanged pending separate endpoint verification.
+
+### Documentation
+- Added an explicit matrix separating official OpenAI Platform service-tier behavior from observations of the undocumented ChatGPT Codex Responses route.
+- Documented that `priority` is a best-effort request and the terminal response value is authoritative.
+
+### Tests
+- Added offline coverage for accepted payload values, local pre-transport rejection, the exported tier type, and absence-preserving response collection.
+
+### Packaging
+- Bumped the local-install package and release artifacts to `0.5.0`.
+
 ## [0.4.1] - 2026-08-10
 
 ### Security

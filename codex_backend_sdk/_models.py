@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 ReasoningEffort = Literal["minimal", "low", "medium", "high", "xhigh"]
 ReasoningSummary = Literal["concise", "detailed", "auto"]
 Verbosity = Literal["low", "medium", "high"]
-ServiceTier = Literal["flex", "priority"]
+ServiceTier = Literal["default", "priority"]
 ParsedT = TypeVar("ParsedT")
 
 

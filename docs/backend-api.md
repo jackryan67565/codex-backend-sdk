@@ -112,6 +112,30 @@ Supported optional fields are normalized before transmission. Parameters known
 to be unsupported by this backend raise locally rather than being silently
 ignored.
 
+### Service tier
+
+`responses.create(...)` and `responses.parse(...)` accept omitted
+`service_tier`, `"default"`, or `"priority"`. Omission leaves the field out of
+the JSON body. Explicit values are sent only as a JSON body field; they do not
+alter authentication, account-routing, originator, or SSE headers.
+
+A six-case live probe on 2026-08-11 using `gpt-5.4` observed:
+
+| Request | HTTP outcome | Raw terminal tier |
+|---|---|---|
+| omitted | 200 completed | `default` |
+| `default` | 200 completed | `default` |
+| `priority` | 200 completed | `default` |
+| `auto` | 400, no terminal SSE event | none |
+| `flex` | 400, no terminal SSE event | none |
+| `fast` | 400, no terminal SSE event | none |
+
+This is evidence for the undocumented ChatGPT route, not a claim about the
+official Platform API or every account rollout. `"priority"` is therefore a
+best-effort request, and the raw terminal response remains authoritative. The
+collector returns `None` when that response omits `service_tier`; it never
+substitutes the locally requested value.
+
 ### Stateless history
 
 The client does not use `previous_response_id`, a ChatGPT conversation ID, or a
@@ -136,6 +160,9 @@ The SDK does not execute returned function calls.
 Compaction accepts caller-supplied history and returns a typed compacted
 response. It shares the function-only tool restriction. It does not read any
 ChatGPT sidebar, account memory, or Codex Cloud task history.
+
+The create-route service-tier validation above is intentionally not applied to
+compaction pending separate live verification of this endpoint.
 
 ## Intentionally removed routes and capabilities
 

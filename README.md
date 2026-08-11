@@ -39,8 +39,9 @@ contract and known differences.
 
 ## Agent-safety contract
 
-Version 0.4 contracts the library around the least authority required for an
-agent to call Codex Responses. The transport accepts only these exact requests:
+Version 0.4 and later contract the library around the least authority required
+for an agent to call Codex Responses. The transport accepts only these exact
+requests:
 
 | Method | Destination |
 |---|---|
@@ -98,14 +99,14 @@ project's virtual environment without publishing this unofficial package:
 ```bash
 uv pip install \
   --python /absolute/path/to/project/.venv/bin/python \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.4.1-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.5.0-py3-none-any.whl
 ```
 
 Or, when that virtual environment includes pip:
 
 ```bash
 /absolute/path/to/project/.venv/bin/python -m pip install \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.4.1-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.5.0-py3-none-any.whl
 ```
 
 The target environment must also satisfy the wheel's `pydantic>=2.0` and
@@ -162,6 +163,30 @@ response = client.responses.create(
 )
 print(response.output_text)
 ```
+
+### Service tier
+
+For `responses.create(...)` and `responses.parse(...)`, omit `service_tier` for
+normal operation or pass `"default"` to request standard processing:
+
+```python
+response = client.responses.create(
+    input="Hello",
+    service_tier="default",
+)
+```
+
+`"priority"` is also accepted as a best-effort request, but it does not
+guarantee Fast processing on this undocumented backend. Inspect
+`response.service_tier` for the processing mode the backend actually reported.
+If the terminal event omits the field, the parsed value remains `None` rather
+than echoing the requested value.
+
+The official OpenAI Platform also documents `"auto"`, `"flex"`, and `"fast"`.
+Live verification against this ChatGPT Codex Responses route on 2026-08-11
+found that those explicit values returned HTTP 400, so this adapter rejects
+them locally instead of silently translating or transmitting them. This
+create/parse finding does not establish the compaction route's behavior.
 
 Responses are caller-managed and stateless. The SDK does not create, list, or
 resume ChatGPT UI conversations and the backend does not expose
