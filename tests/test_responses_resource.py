@@ -8,6 +8,7 @@ from codex_backend_sdk import OpenAI, ParsedResponse, Response
 class FakeSSE:
     def __init__(self, events):
         self._events = events
+        self.closed = False
 
     def iter_lines(self):
         for event in self._events:
@@ -17,14 +18,21 @@ class FakeSSE:
                 yield event
         yield b""
 
+    def close(self):
+        self.closed = True
+
 
 class FakeJSONResponse:
     def __init__(self, payload, headers=None):
         self._payload = payload
         self.headers = headers or {}
+        self.closed = False
 
     def json(self):
         return self._payload
+
+    def close(self):
+        self.closed = True
 
 
 class FakeClient(OpenAI):
@@ -43,7 +51,7 @@ class FakeClient(OpenAI):
     ):
         self.posts.append(("/responses", body, stream))
         self.post_options.append(timeout)
-        return FakeSSE([
+        self.last_response = FakeSSE([
             'data: {"type":"response.content_part.delta","delta":{"text":"hel"}}',
             "",
             'data: {"type":"response.content_part.delta","delta":{"text":"lo"}}',
@@ -54,19 +62,21 @@ class FakeClient(OpenAI):
                 '"usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}}}'
             ),
         ])
+        return self.last_response
 
     def _request_compaction(self, *, body, timeout=None):
         self.posts.append(("/responses/compact", body, False))
         self.post_options.append(timeout)
-        return FakeJSONResponse({
+        self.last_response = FakeJSONResponse({
             "id": "resp_123",
             "output": [{"type": "message", "content": []}],
             "usage": {"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
         })
+        return self.last_response
 
     def _request_models(self, *, client_version, timeout=None):
         self.gets.append(("/models", {"client_version": client_version}))
-        return FakeJSONResponse(
+        self.last_response = FakeJSONResponse(
             {
                 "models": [
                     {
@@ -89,6 +99,7 @@ class FakeClient(OpenAI):
             },
             headers={"ETag": "models-etag"},
         )
+        return self.last_response
 
 
 class ParsedPerson(BaseModel):
@@ -111,7 +122,7 @@ class ParseFakeClient(FakeClient):
     ):
         self.posts.append(("/responses", body, stream))
         self.post_options.append(timeout)
-        return FakeSSE([
+        self.last_response = FakeSSE([
             (
                 'data: {"type":"response.output_text.delta","delta":'
                 '"{\\"name\\":\\"Ada\\",\\"age\\":37}"}'
@@ -124,6 +135,7 @@ class ParseFakeClient(FakeClient):
                 '"text":"{\\"name\\":\\"Ada\\",\\"age\\":37}"}]}]}}'
             ),
         ])
+        return self.last_response
 
 
 def test_responses_create_collects_to_pydantic_response():
@@ -142,6 +154,7 @@ def test_responses_create_collects_to_pydantic_response():
     assert response.output_text == "hello"
     assert "output_text" not in response.model_dump()
     assert response.usage.total_tokens == 3
+    assert client.last_response.closed is True
 
     path, payload, stream = client.posts[0]
     assert path == "/responses"
@@ -268,6 +281,18 @@ def test_responses_create_stream_returns_openai_event_objects():
     assert events[0].delta == {"text": "hel"}
     assert events[-1].type == "response.completed"
     assert events[-1].response["id"] == "resp_123"
+    assert client.last_response.closed is True
+
+
+def test_responses_stream_close_releases_response_after_iteration_starts():
+    client = FakeClient()
+    events = client.responses.create(input="Hi", stream=True)
+
+    next(events)
+    assert client.last_response.closed is False
+    events.close()
+
+    assert client.last_response.closed is True
 
 
 def test_models_resource_returns_iterable_page():
@@ -282,6 +307,7 @@ def test_models_resource_returns_iterable_page():
     assert page.etag == "models-etag"
     assert client.models.retrieve("gpt-test").id == "gpt-test"
     assert len(client.gets) == 1
+    assert client.last_response.closed is True
 
 
 def test_models_resource_can_force_refresh_cached_page():
@@ -317,6 +343,7 @@ def test_responses_compact_sends_shared_request_fields():
     assert compacted.usage.input_tokens == 11
     assert compacted.usage.output_tokens == 7
     assert compacted.usage.total_tokens == 18
+    assert client.last_response.closed is True
     path, payload, stream = client.posts[0]
     assert path == "/responses/compact"
     assert stream is False

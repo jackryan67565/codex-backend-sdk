@@ -90,6 +90,15 @@ class CodexClient:
     def authenticated(self) -> bool:
         return self.__credentials is not None
 
+    def close(self) -> None:
+        self._session.close()
+
+    def __enter__(self) -> "CodexClient":
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
     def _request_models(
         self,
         *,

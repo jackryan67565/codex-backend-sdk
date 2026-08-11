@@ -12,8 +12,11 @@ from ._models import ResponseStreamEvent
 
 
 def stream_response_events(response: requests.Response) -> Iterator[ResponseStreamEvent]:
-    for payload in iter_sse_payloads(response):
-        yield ResponseStreamEvent.model_validate(payload)
+    try:
+        for payload in iter_sse_payloads(response):
+            yield ResponseStreamEvent.model_validate(payload)
+    finally:
+        response.close()
 
 
 def iter_sse_payloads(response: requests.Response) -> Iterator[dict[str, Any]]:

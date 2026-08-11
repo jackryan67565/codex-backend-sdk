@@ -37,10 +37,14 @@ class Models:
             client_version=CLIENT_VERSION,
             timeout=timeout,
         )
-        data = response.json()
+        try:
+            data = response.json()
+            etag = response.headers.get("ETag")
+        finally:
+            response.close()
         models = [_model_from_backend(item) for item in data.get("models", [])]
         models.sort(key=lambda model: getattr(model, "priority", 0))
-        page = SyncPage(data=models, etag=response.headers.get("ETag"))
+        page = SyncPage(data=models, etag=etag)
         self._cache = page
         self._cache_fetched_at = time.time()
         return page

@@ -8,7 +8,7 @@ from typing import Any
 
 import requests
 
-from ._network import reject_redirect_response, validate_agent_sdk_request
+from ._network import OpenAINetworkPolicyError, reject_redirect_response, validate_agent_sdk_request
 
 
 _MAX_RETRY_DELAY_SECONDS = 60.0
@@ -32,8 +32,13 @@ def request_with_retries(
         try:
             response = session.request(method, url, **kwargs)
             _strip_response_request_credentials(response)
-            reject_redirect_response(response)
+            try:
+                reject_redirect_response(response)
+            except OpenAINetworkPolicyError:
+                response.close()
+                raise
             if may_retry and should_retry_response(response, attempt, max_retries=max_retries):
+                response.close()
                 sleep_before_retry(response, attempt, retry_base_delay=retry_base_delay)
                 continue
             response.raise_for_status()

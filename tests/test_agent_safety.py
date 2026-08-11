@@ -76,6 +76,17 @@ def test_client_session_ignores_environment_proxies():
     assert CodexClient()._session.trust_env is False
 
 
+def test_client_context_manager_closes_owned_session(monkeypatch):
+    client = CodexClient()
+    closed = []
+    monkeypatch.setattr(client._session, "close", lambda: closed.append(True))
+
+    with client as entered:
+        assert entered is client
+
+    assert closed == [True]
+
+
 def test_model_conversion_does_not_retain_unmapped_backend_payload():
     model = _model_from_backend({
         "slug": "gpt-test",

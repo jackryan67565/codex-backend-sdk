@@ -215,7 +215,11 @@ class Responses:
             payload["prompt_cache_key"] = prompt_cache_key
         if _is_given(text) and text is not None:
             payload["text"] = normalize_text(text)
-        data = self._client._request_compaction(body=payload).json()
+        response = self._client._request_compaction(body=payload)
+        try:
+            data = response.json()
+        finally:
+            response.close()
         return CompactedResponse(
             id=data.get("id", ""),
             object=data.get("object", "response.compacted"),

@@ -30,18 +30,21 @@ class RetryClient(OpenAI):
 
 def _response(status_code, *, body=b"{}", headers=None):
     response = requests.Response()
+    response.was_closed = False
     response.status_code = status_code
     response._content = body
     response.headers.update(headers or {})
     response.url = "https://example.test"
+    response.close = lambda: setattr(response, "was_closed", True)
     return response
 
 
 def test_retry_retries_5xx_then_returns_success(monkeypatch):
     sleeps = []
     monkeypatch.setattr(transport_module.time, "sleep", sleeps.append)
+    retried_response = _response(503)
     client = RetryClient([
-        _response(503),
+        retried_response,
         _response(200, body=b'{"ok": true}'),
     ])
 
@@ -50,6 +53,7 @@ def test_retry_retries_5xx_then_returns_success(monkeypatch):
     assert response.json() == {"ok": True}
     assert len(client._session.calls) == 2
     assert client._session.calls[0][2]["allow_redirects"] is False
+    assert retried_response.was_closed is True
     assert sleeps == [0]
 
 
