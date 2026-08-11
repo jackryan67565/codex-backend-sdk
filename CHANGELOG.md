@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Added an official-Responses-shaped live smoke test for structured manual-replay repair with `store=False` and `max_retries=0`.
 
 ### Changed
+- Changed the client default model from `gpt-5.4` to the explicit `gpt-5.6-sol` ID while preserving client- and request-level `model=` overrides.
 - Preserve assistant output message `id`, `status`, and `phase` when replaying prior `response.output` items through a new request's `input`.
 - Keep returned reasoning context backend-authoritative instead of echoing a requested value when the terminal response omits it.
 - Reject unverified explicit reasoning-context values before transport while retaining the official `responses.create(...)` surface.

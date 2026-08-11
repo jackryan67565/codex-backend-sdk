@@ -9,7 +9,6 @@ pytestmark = pytest.mark.live
 
 def test_responses_create_returns_text(client: CodexClient):
     response = client.responses.create(
-        model="gpt-5.4",
         input="Reply with exactly: PONG",
     )
 

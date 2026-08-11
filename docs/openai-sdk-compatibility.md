@@ -10,8 +10,12 @@ support. The primary import and call pattern is:
 from codex_backend_sdk import OpenAI
 
 client = OpenAI().authenticate()
-response = client.responses.create(model="gpt-5.4", input="Hello")
+response = client.responses.create(input="Hello")
 ```
+
+The adapter's client default is the explicit `gpt-5.6-sol` model ID. Supplying
+`model=` at client construction or on an individual request continues to
+override that default.
 
 The public compatibility baseline was checked on 2026-08-09 against the locally
 installed `openai` 2.46.0 package and the official [Responses create

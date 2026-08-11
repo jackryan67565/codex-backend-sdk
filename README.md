@@ -24,7 +24,7 @@ Use the familiar primary client name and Responses call shape:
 from codex_backend_sdk import OpenAI
 
 client = OpenAI().authenticate()
-response = client.responses.create(model="gpt-5.4", input="Hello")
+response = client.responses.create(input="Hello")
 ```
 
 The compatibility target is the supported subset, not the full official SDK.
@@ -158,11 +158,16 @@ from codex_backend_sdk import OpenAI
 
 client = OpenAI().authenticate()
 response = client.responses.create(
-    model="gpt-5.4",
     input="Explain quicksort in one paragraph.",
 )
 print(response.output_text)
 ```
+
+`OpenAI()` defaults to the explicit `gpt-5.6-sol` model ID. Pass `model=` to
+the client or an individual request to override it. The adapter does not inject
+a reasoning effort when one is omitted; effective behavior remains
+backend-authoritative and model availability remains account- and
+rollout-dependent.
 
 ### Service tier
 
@@ -291,7 +296,6 @@ print(parsed.output_parsed)
 
 ```python
 compacted = client.responses.compact(
-    model="gpt-5.4",
     input=history,
     instructions="Compact the caller-managed history.",
 )

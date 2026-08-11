@@ -41,7 +41,7 @@ class CodexClient:
     def __init__(
         self,
         *,
-        model: str = "gpt-5.4",
+        model: str = "gpt-5.6-sol",
         instructions: Optional[str] = None,
         timeout: float = 120,
         max_retries: int = 2,

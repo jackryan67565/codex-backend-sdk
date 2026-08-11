@@ -27,6 +27,13 @@ def test_primary_client_keeps_official_timeout_and_retry_keyword_names():
     assert "max_retries" in parameters
 
 
+def test_primary_client_defaults_to_explicit_gpt_5_6_sol_model_id():
+    parameters = inspect.signature(OpenAI).parameters
+
+    assert parameters["model"].default == "gpt-5.6-sol"
+    assert OpenAI()._defaults["model"] == "gpt-5.6-sol"
+
+
 def test_responses_create_keeps_supported_official_keyword_names():
     parameters = inspect.signature(Responses.create).parameters
     expected = {

@@ -92,11 +92,11 @@ discovery.
 The backend streams SSE. A non-streaming SDK call collects those events into a
 typed `Response`; `stream=True` returns the event iterator.
 
-The prepared payload always includes:
+With the default client settings, the prepared payload includes:
 
 ```json
 {
-  "model": "gpt-5.4",
+  "model": "gpt-5.6-sol",
   "instructions": "",
   "input": [],
   "tools": [],
