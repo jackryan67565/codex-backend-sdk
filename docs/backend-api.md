@@ -1,6 +1,6 @@
 # Agent-safe Codex backend wire notes
 
-This document describes the current `0.4.x` SDK contract. The backend is
+This document describes the maintained SDK contract. The backend is
 undocumented and may change without notice. `README.md` remains the maintained
 user entrypoint.
 
@@ -67,6 +67,11 @@ Accept: text/event-stream
 ```
 
 Callers cannot provide or override request headers.
+After a request is sent, the transport removes `Authorization` and
+`ChatGPT-Account-ID` from retained Requests request, response, and exception
+objects before they can escape the SDK. The headers still exist on the wire;
+this cleanup reduces accidental credential retention rather than changing
+authentication.
 
 ## `GET /backend-api/codex/models`
 
@@ -107,6 +112,9 @@ With the default client settings, the prepared payload includes:
   "include": []
 }
 ```
+
+`gpt-5.6-sol` is the checked-in client's local default. It is not evidence that
+the undocumented backend exposes that model to every account or rollout.
 
 Supported optional fields are normalized before transmission. Parameters known
 to be unsupported by this backend raise locally rather than being silently

@@ -1,4 +1,9 @@
-"""Minimal function-calling loop using the OpenAI-shaped Codex client."""
+"""Minimal function-calling loop using the OpenAI-shaped Codex client.
+
+The omitted model uses the documented ``gpt-5.6-sol`` client default. Pass an
+explicit ``model=`` to ``OpenAI`` or ``responses.create`` when another model is
+required.
+"""
 
 from __future__ import annotations
 

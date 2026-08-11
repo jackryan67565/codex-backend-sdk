@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 - Added a live-evidence capability matrix, measured initial/corrective usage, explicit storage and retention limits, and the boundary between CBS transport compatibility and caller-owned repair policy.
+- Added agent-facing model-default guidance across repository instructions, quickstarts, compatibility notes, wire notes, and the function-calling example.
+- Clarified that ignored `dist/` artifacts may lag the checkout and that the existing `0.5.0` checkpoint predates the `gpt-5.6-sol` default.
+- Refreshed stale backend-version prose, security-review source anchors, verification counts, and repository package metadata.
 
 ### Tests
 - Added offline regressions for complete output replay, structured follow-up, typed reasoning context, pre-transport limitations, usage details, and absence-preserving response collection.

@@ -4,6 +4,12 @@
 
 This repository is an agent-safe, unofficial Python client for the undocumented ChatGPT Codex Responses backend. It is not an OpenAI-supported SDK. Start with this file, then read `README.md`, `pyproject.toml`, and only the source or focused backend notes needed for the task. Treat `CHANGELOG.md` and `docs/audits/` as history/evidence, not current authority.
 
+## Current model default
+
+- The checked-in `OpenAI()` client defaults to the exact `gpt-5.6-sol` model ID. Omitting `model` uses that default; a constructor-level or request-level `model=` explicitly overrides it. The local default is not proof that every ChatGPT account or rollout can serve the model.
+- Keep dated `gpt-5.4` probes, measurements, and their pinned live test unchanged unless a newly authorized live run replaces that evidence. They describe observed history, not the current default.
+- Treat the checked-in source as authoritative during unreleased work. `dist/` is ignored and may be absent or older than the worktree; never tell another agent that a wheel contains the current default without inspecting or rebuilding a new versioned checkpoint.
+
 ## Working agreements
 
 - After each completed, coherent change, inspect the intended diff, create a descriptive Git commit, and push the current branch before handoff. Do not batch unrelated work or stage changes outside the current task; if repository state, authentication, or remote policy prevents a safe commit or push, report that explicitly.
@@ -62,3 +68,4 @@ Every connection-capable match must be one of the three exact routes above. JWT 
 - `security_best_practices_report.md` records the current agent-safety review and deployment boundary.
 - `CHANGELOG.md` is append-only chronology.
 - `docs/audits/cold-substrate-sweep-v1.md` is a frozen pre-repair audit and must not be rewritten.
+- When the model default changes, keep the constructor, README quickstart, compatibility contract, wire-payload example, tests, and changelog aligned. Do not mechanically rewrite dated backend evidence.

@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-The `0.5.0` worktree has been contracted from a broad ChatGPT backend SDK to a
+The current worktree has been contracted from a broad ChatGPT backend SDK to a
 narrow agent-use client. Repository-managed connections are limited to Codex
 model discovery, Responses, and Responses compaction. Credential lifecycle,
 account data, Cloud history, state mutation, arbitrary uploads, Platform APIs,
@@ -34,7 +34,7 @@ the minimal private credential object redacts both token and account ID from its
 representation ([`codex_backend_sdk/_client.py:30`](codex_backend_sdk/_client.py#L30),
 [`codex_backend_sdk/_storage.py:43`](codex_backend_sdk/_storage.py#L43)). Negative
 export and retired-module checks are in
-[`tests/test_agent_safety.py:17`](tests/test_agent_safety.py#L17).
+[`tests/test_agent_safety.py:19`](tests/test_agent_safety.py#L19).
 
 ### AS-002 — Bearer accepted by unrelated account and stateful routes — Remediated
 
@@ -45,7 +45,7 @@ The transport now validates the exact method, host, and path against three
 entries before opening a connection
 ([`codex_backend_sdk/_network.py:11`](codex_backend_sdk/_network.py#L11)). The client
 constructs only fixed model, Responses, and compaction operations
-([`codex_backend_sdk/_client.py:93`](codex_backend_sdk/_client.py#L93)). The broader
+([`codex_backend_sdk/_client.py:102`](codex_backend_sdk/_client.py#L102)). The broader
 resource and transport modules were deleted.
 
 ## High findings
@@ -70,7 +70,7 @@ offline and does not load the user's credential cache.
 Only caller-executed `function` tools and matching function choices are
 accepted. Web-search, computer-use, MCP, and other hosted tool types fail before
 transport
-([`codex_backend_sdk/resources/_responses_payloads.py:177`](codex_backend_sdk/resources/_responses_payloads.py#L177)).
+([`codex_backend_sdk/resources/_responses_payloads.py:218`](codex_backend_sdk/resources/_responses_payloads.py#L218)).
 
 ### AS-009 — Credentials retained by transport exceptions — Remediated
 
@@ -82,7 +82,7 @@ remain available without carrying the credentials
 ([`codex_backend_sdk/_transport.py:47`](codex_backend_sdk/_transport.py#L47)).
 Synthetic offline coverage exercises status, redirect, timeout, and connection
 failures across all three resources
-([`tests/test_transport_sanitization.py:65`](tests/test_transport_sanitization.py#L65)).
+([`tests/test_transport_sanitization.py:75`](tests/test_transport_sanitization.py#L75)).
 
 ## Medium findings
 
@@ -91,7 +91,7 @@ failures across all three resources
 Retries are restricted to idempotent methods. Responses and compaction POSTs
 are never replayed after ambiguous timeouts, connection failures, rate limits,
 or server errors
-([`codex_backend_sdk/_transport.py:17`](codex_backend_sdk/_transport.py#L17)).
+([`codex_backend_sdk/_transport.py:43`](codex_backend_sdk/_transport.py#L43)).
 
 ### AS-007 — Credential-cache overreach and mutation — Remediated
 
@@ -112,7 +112,7 @@ seconds; non-idempotent requests remain non-retryable
 
 ## Verification evidence
 
-- Offline suite: `112 passed, 12 skipped`.
+- Offline suite on 2026-08-11: `113 passed, 12 skipped`.
 - Python compilation completed for `codex_backend_sdk` and `tests`.
 - `git diff --check` completed without whitespace errors.
 - Source URL scan found one connection base:

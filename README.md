@@ -27,6 +27,11 @@ client = OpenAI().authenticate()
 response = client.responses.create(input="Hello")
 ```
 
+Omitting `model` selects the current checkout's client default,
+`gpt-5.6-sol`. Pass `model=` to `OpenAI(...)` or an individual Responses call
+to override it. This local default does not guarantee availability for every
+ChatGPT account or rollout.
+
 The compatibility target is the supported subset, not the full official SDK.
 Authentication uses a read-only Codex login instead of an API key, and the
 agent-safe boundary intentionally rejects unsupported resources, hosted tools,
@@ -80,7 +85,16 @@ credential broker when executing untrusted agents.
 Never print, log, copy, or commit `$CODEX_HOME/auth.json`, request headers, or
 authenticated response bodies.
 
+See the current [agent-safety security review](security_best_practices_report.md)
+for the reviewed boundary, remediations, and deployment requirements.
+
 ## Installation
+
+The commands in this section are for an operator or a target project's virtual
+environment. They do not authorize GitHub, package-host, or other non-OpenAI
+network access inside this repository's offline Codex substrate. Installers may
+contact their configured package index when build requirements or dependencies
+are unavailable locally.
 
 ```bash
 git clone https://github.com/jackryan67565/codex-backend-sdk.git
@@ -88,30 +102,42 @@ cd codex-backend-sdk
 pip install -e .
 ```
 
-Installing packages can contact the package index configured for the local
-environment. Package installation is outside the SDK runtime network contract.
+### Install the current checkout in another project
 
-### Install the local wheel in another project
-
-Release checkpoints are built into `dist/`. Install the wheel directly into a
-project's virtual environment without publishing this unofficial package:
+An editable path install makes the target environment use the current checkout:
 
 ```bash
 uv pip install \
   --python /absolute/path/to/project/.venv/bin/python \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.5.0-py3-none-any.whl
+  --editable /absolute/path/to/codex-backend-sdk
 ```
 
 Or, when that virtual environment includes pip:
 
 ```bash
 /absolute/path/to/project/.venv/bin/python -m pip install \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.5.0-py3-none-any.whl
+  --editable /absolute/path/to/codex-backend-sdk
 ```
 
-The target environment must also satisfy the wheel's `pydantic>=2.0` and
-`requests>=2.28` dependencies. An installer may contact its configured package
-index when those dependencies are not already available locally.
+`dist/` is intentionally Git-ignored, so a clone may not contain a wheel and a
+local artifact may trail the checked-in source. In particular, the `0.5.0`
+checkpoint predates the `gpt-5.6-sol` default and still defaults to `gpt-5.4`.
+Do not replace that artifact with different same-version contents. Build a new
+versioned checkpoint before distributing a wheel, or use the editable checkout
+until one exists. The editable checkout currently reports package version
+`0.5.0` while carrying these unreleased post-checkpoint changes.
+
+Verify an installed copy without authenticating or contacting the backend:
+
+```python
+from inspect import signature
+from codex_backend_sdk import OpenAI, __version__
+
+print(__version__, signature(OpenAI).parameters["model"].default)
+```
+
+The target environment must satisfy `pydantic>=2.0` and `requests>=2.28`.
+Package installation is outside the SDK runtime network contract.
 
 ## Authentication
 
@@ -163,11 +189,8 @@ response = client.responses.create(
 print(response.output_text)
 ```
 
-`OpenAI()` defaults to the explicit `gpt-5.6-sol` model ID. Pass `model=` to
-the client or an individual request to override it. The adapter does not inject
-a reasoning effort when one is omitted; effective behavior remains
-backend-authoritative and model availability remains account- and
-rollout-dependent.
+The adapter does not inject a reasoning effort when one is omitted; effective
+behavior remains backend-authoritative.
 
 ### Service tier
 
@@ -334,7 +357,7 @@ The default suite is offline and must not load stored credentials or contact a
 network service:
 
 ```bash
-python -m pytest -q
+env -u TEMP -u TMP .venv/bin/python -m pytest -q
 ```
 
 Live integration tests are marked `live` and skipped by default. Run them only
@@ -342,7 +365,7 @@ after deliberately authorizing stored credential use, OpenAI network access,
 and account quota consumption:
 
 ```bash
-python -m pytest --live -q \
+env -u TEMP -u TMP .venv/bin/python -m pytest --live -q \
   tests/test_basic.py \
   tests/test_conversation.py \
   tests/test_reasoning.py \

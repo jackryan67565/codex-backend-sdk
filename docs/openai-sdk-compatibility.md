@@ -15,7 +15,9 @@ response = client.responses.create(input="Hello")
 
 The adapter's client default is the explicit `gpt-5.6-sol` model ID. Supplying
 `model=` at client construction or on an individual request continues to
-override that default.
+override that default. This is the current checkout contract, not a claim of
+universal backend availability. The `0.5.0` release artifacts predate this
+unreleased change and still use `gpt-5.4`.
 
 The public compatibility baseline was checked on 2026-08-09 against the locally
 installed `openai` 2.46.0 package and the official [Responses create

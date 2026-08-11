@@ -26,6 +26,11 @@ dependencies = [
     "requests>=2.28",
 ]
 
+[project.urls]
+Repository = "https://github.com/jackryan67565/codex-backend-sdk"
+Documentation = "https://github.com/jackryan67565/codex-backend-sdk#readme"
+Issues = "https://github.com/jackryan67565/codex-backend-sdk/issues"
+
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
 
