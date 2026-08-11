@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+- Removed bearer and account-routing headers from retained Requests objects before successful responses or transport failures escape the internal transport, while preserving existing exception classes and retry behavior.
+- Replaced the internal transport's arbitrary Requests keyword forwarding with an explicit, closed set of request options.
+
+### Changed
+- Added client `close()` and context-manager support, and deterministically close consumed model, compaction, retry, redirect, and SSE response resources.
+
+### Tests
+- Added a synthetic offline matrix covering HTTP status, redirect, timeout, and connection failures across Models, Responses, and Compaction, including wire-header presence followed by retained-object sanitization.
+
 ## [0.4.0] - 2026-08-09
 
 ### Security

@@ -107,6 +107,14 @@ from codex_backend_sdk import OpenAI
 client = OpenAI().authenticate()
 ```
 
+The client owns its HTTP session. Use it as a context manager when practical so
+the session is closed deterministically:
+
+```python
+with OpenAI().authenticate() as client:
+    response = client.responses.create(input="Hello")
+```
+
 `authenticate()` is deliberately read-only and local. It retains only the access
 token and ChatGPT account identifier needed by the Codex backend. It does not:
 

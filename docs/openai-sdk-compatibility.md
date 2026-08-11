@@ -23,7 +23,8 @@ The official reference demonstrates the same `OpenAI()` client,
 ## Supported drop-in subset
 
 - `OpenAI` construction with the adapter's safe local options, followed by the
-  adapter-specific read-only `.authenticate()` step.
+  adapter-specific read-only `.authenticate()` step. The client supports
+  `close()` and context-manager cleanup for its owned HTTP session.
 - `client.responses.create(...)` for non-streaming and `stream=True` calls.
 - `client.responses.parse(...)` for Pydantic structured output.
 - `client.responses.compact(...)` for the approved Codex compact route.

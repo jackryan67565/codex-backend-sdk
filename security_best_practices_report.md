@@ -72,6 +72,18 @@ accepted. Web-search, computer-use, MCP, and other hosted tool types fail before
 transport
 ([`codex_backend_sdk/resources/_responses_payloads.py:177`](codex_backend_sdk/resources/_responses_payloads.py#L177)).
 
+### AS-009 — Credentials retained by transport exceptions — Remediated
+
+Requests exceptions and responses can retain their prepared request. The
+transport now removes the bearer and account-routing headers from those stored
+request objects immediately after transmission and before a response or
+exception escapes. Existing status, timeout, and connection exception classes
+remain available without carrying the credentials
+([`codex_backend_sdk/_transport.py:47`](codex_backend_sdk/_transport.py#L47)).
+Synthetic offline coverage exercises status, redirect, timeout, and connection
+failures across all three resources
+([`tests/test_transport_sanitization.py:65`](tests/test_transport_sanitization.py#L65)).
+
 ## Medium findings
 
 ### AS-006 — Automatic replay of non-idempotent Responses POSTs — Remediated
@@ -95,12 +107,12 @@ cache ([`codex_backend_sdk/_storage.py:56`](codex_backend_sdk/_storage.py#L56),
 Constructor and per-call timeouts must be finite, positive, and at most ten
 minutes. Model-read retries are capped at five and individual delays at 60
 seconds; non-idempotent requests remain non-retryable
-([`codex_backend_sdk/_client.py:40`](codex_backend_sdk/_client.py#L40),
-[`codex_backend_sdk/_transport.py:60`](codex_backend_sdk/_transport.py#L60)).
+([`codex_backend_sdk/_client.py:186`](codex_backend_sdk/_client.py#L186),
+[`codex_backend_sdk/_transport.py:101`](codex_backend_sdk/_transport.py#L101)).
 
 ## Verification evidence
 
-- Offline suite: `73 passed, 11 skipped`.
+- Offline suite: `93 passed, 11 skipped`.
 - Python compilation completed for `codex_backend_sdk` and `tests`.
 - `git diff --check` completed without whitespace errors.
 - Source URL scan found one connection base:
@@ -108,7 +120,8 @@ seconds; non-idempotent requests remain non-retryable
 - Negative tests cover retired modules/resources, credential exports,
   credential representations, symlinked auth files, stale credentials, unsafe
   routes and methods, caller headers/query, hosted tools, redirects, proxy
-  inheritance, and non-idempotent retries.
+  inheritance, non-idempotent retries, retained-request credential
+  sanitization, and response cleanup.
 
 ## Deployment requirement
 
