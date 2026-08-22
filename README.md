@@ -326,7 +326,20 @@ compacted = client.responses.compact(
     input=history,
     instructions="Compact the caller-managed history.",
 )
+
+continued = client.responses.create(
+    input=[
+        *compacted.output,
+        {"role": "user", "content": "Continue from the compacted state."},
+    ],
+    store=False,
+)
 ```
+
+Standalone compaction is stateless. Pass `compacted.output` forward unchanged
+as the next request's context window, then append the new user or tool items.
+Do not use `compacted.id` as `previous_response_id`; CBS does not support or
+imply server-side linkage through the compaction response ID.
 
 ## Models
 

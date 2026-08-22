@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Documentation
+- Clarified that standalone compaction continues by replaying `compacted.output` unchanged and never by treating `compacted.id` as a `previous_response_id` linkage token.
+
+### Tests
+- Added an offline regression for the official stateless compact-output replay shape.
+
 ## [0.5.1] - 2026-08-11
 
 ### Added

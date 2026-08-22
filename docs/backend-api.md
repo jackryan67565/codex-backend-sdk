@@ -221,6 +221,12 @@ Compaction accepts caller-supplied history and returns a typed compacted
 response. It shares the function-only tool restriction. It does not read any
 ChatGPT sidebar, account memory, or Codex Cloud task history.
 
+The returned `output` list is the canonical stateless continuation carrier.
+Callers pass it unchanged as the beginning of a later `responses.create(...)`
+input and append the next user or tool items. The returned `id` remains typed
+response metadata; CBS does not treat it as a `previous_response_id` linkage
+token or claim server-side state reuse.
+
 The create-route service-tier validation above is intentionally not applied to
 compaction pending separate live verification of this endpoint.
 

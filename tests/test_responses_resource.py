@@ -592,6 +592,37 @@ def test_responses_compact_sends_shared_request_fields():
     }
 
 
+def test_responses_create_continues_from_compacted_output_without_id_linkage():
+    client = FakeClient()
+
+    compacted = client.responses.compact(
+        input=[{"role": "user", "content": "Long context"}],
+    )
+    client.responses.create(
+        input=[
+            *compacted.output,
+            {"role": "user", "content": "Continue from compacted state."},
+        ],
+        store=False,
+    )
+
+    path, payload, stream = client.posts[1]
+    assert path == "/responses"
+    assert stream is True
+    assert payload["input"] == [
+        {"type": "message", "content": []},
+        {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Continue from compacted state."}
+            ],
+        },
+    ]
+    assert "previous_response_id" not in payload
+    assert payload["store"] is False
+
+
 def test_responses_create_rejects_official_params_not_exposed_by_codex_backend():
     client = FakeClient()
 
