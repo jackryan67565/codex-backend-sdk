@@ -78,6 +78,7 @@ class FakeClient(OpenAI):
             "id": "resp_123",
             "output": [{"type": "message", "content": []}],
             "usage": {"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
+            "backend_shape_marker": {"present": True},
         })
         return self.last_response
 
@@ -565,6 +566,7 @@ def test_responses_compact_sends_shared_request_fields():
     assert compacted.usage.input_tokens == 11
     assert compacted.usage.output_tokens == 7
     assert compacted.usage.total_tokens == 18
+    assert compacted.backend_shape_marker == {"present": True}
     assert client.last_response.closed is True
     path, payload, stream = client.posts[0]
     assert path == "/responses/compact"

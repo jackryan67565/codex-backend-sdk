@@ -384,11 +384,22 @@ and account quota consumption:
 ```bash
 env -u TEMP -u TMP .venv/bin/python -m pytest --live -q \
   tests/test_basic.py \
+  tests/test_compaction.py \
   tests/test_conversation.py \
   tests/test_reasoning.py \
   tests/test_repair_iteration.py \
   tests/test_structured_output.py \
   tests/test_tools.py
+```
+
+Run the focused compaction smoke test with output capture disabled to print a
+sanitized structural report. It reports field names, item types, ciphertext
+lengths and hashes, retained-item counts, usage, and continuation success; it
+never prints credentials, ciphertext, retained message text, or model output:
+
+```bash
+env -u TEMP -u TMP .venv/bin/python -m pytest --live -q -s \
+  tests/test_compaction.py
 ```
 
 ## Historical versions

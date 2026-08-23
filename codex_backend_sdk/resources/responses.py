@@ -226,9 +226,9 @@ class Responses:
             data = response.json()
         finally:
             response.close()
-        return CompactedResponse(
-            id=data.get("id", ""),
-            object=data.get("object", "response.compacted"),
-            output=data.get("output", []),
-            usage=_usage_from_backend(data.get("usage")),
-        )
+        parsed = dict(data)
+        parsed.setdefault("id", "")
+        parsed.setdefault("object", "response.compacted")
+        parsed.setdefault("output", [])
+        parsed["usage"] = _usage_from_backend(data.get("usage"))
+        return CompactedResponse.model_validate(parsed)

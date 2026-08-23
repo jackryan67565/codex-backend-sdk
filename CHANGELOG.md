@@ -9,6 +9,12 @@ All notable changes to this project will be documented in this file.
 
 ### Tests
 - Added an offline regression for the official stateless compact-output replay shape.
+- Added an explicitly live-gated compaction endpoint smoke test that emits only
+  a sanitized structural report and verifies stateless compact-output replay.
+
+### Changed
+- Preserve unknown top-level compaction response fields on the typed response so
+  backend shape probes do not silently hide additions such as a summary field.
 
 ## [0.5.1] - 2026-08-11
 

@@ -230,6 +230,14 @@ token or claim server-side state reuse.
 The create-route service-tier validation above is intentionally not applied to
 compaction pending separate live verification of this endpoint.
 
+`tests/test_compaction.py` contains the focused live smoke test for the compact
+route. It examines the typed response's complete top-level field set and output
+item structure, confirms an encrypted compaction item is present, then replays
+the canonical window through `responses.create(...)`. Its printed report is
+structural only: authenticated plaintext, ciphertext, response text, and
+credentials are never emitted. Run it only with the repository's explicit
+`--live` credential/network/quota gate.
+
 ## Intentionally removed routes and capabilities
 
 Earlier versions recorded or exposed broader observed endpoints. Version 0.4
