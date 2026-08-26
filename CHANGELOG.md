@@ -2,19 +2,64 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.6.0] - 2026-08-26
 
-### Documentation
-- Clarified that standalone compaction continues by replaying `compacted.output` unchanged and never by treating `compacted.id` as a `previous_response_id` linkage token.
-
-### Tests
-- Added an offline regression for the official stateless compact-output replay shape.
-- Added an explicitly live-gated compaction endpoint smoke test that emits only
-  a sanitized structural report and verifies stateless compact-output replay.
+### Added
+- Added the standard `client.responses.with_raw_response.create(...)` path with
+  request bytes, safe HTTP metadata, request ID, received bytes, retry count,
+  and `.parse()` following the pinned official synchronous wrapper shape.
+- Added official-compatible Responses transport error categories and preserved
+  backend error bodies plus safe request IDs on status failures.
 
 ### Changed
+- Pinned exact `openai==2.46.0` in the development extra as the differential
+  compatibility baseline; the official client is not a runtime dependency.
+- Preserve explicit canonical request values, including `reasoning.effort` set
+  to `medium` or `low`, model, input, function tools, `store=false`, and
+  text/schema configuration, without schema-default invention.
+- Make the non-streaming Response entirely terminal-event-sourced. Missing
+  model names, identifiers, timestamps, statuses, usage, request echoes, and
+  output now remain absent instead of being reconstructed or synthesized.
+- Apply the configured official retry count and retryable conditions to
+  Responses creation. `max_retries=0` permits at most one attempt; compaction
+  remains non-retryable.
 - Preserve unknown top-level compaction response fields on the typed response so
   backend shape probes do not silently hide additions such as a summary field.
+
+### Security
+- Sanitize bearer/account headers from retained raw/error request objects and
+  remove credential-bearing response headers while keeping exact application
+  body bytes observable.
+- Keep `max_output_tokens` as an explicit pre-transport incompatibility rather
+  than dropping or reinterpreting an unverified output limit.
+
+### Fixed
+- Raise explicit connection or validation errors when SSE lacks a terminal
+  event or contains malformed JSON, and close consumed streaming responses.
+- Stop using locally requested values or zero-filled usage as substitutes for
+  omitted backend response facts.
+- Keep model-catalog enumeration independent of Responses model submission.
+
+### Documentation
+- Documented the raw wrapper, typed errors, retry ambiguity, terminal-event
+  truth boundary, exact compatibility pin, and remaining backend/security
+  differences.
+- Clarified that standalone compaction continues by replaying
+  `compacted.output` unchanged and never by treating `compacted.id` as a
+  `previous_response_id` linkage token.
+
+### Tests
+- Added network-free differential tests against `openai==2.46.0` for prepared
+  bodies, raw access, typed failures, sparse terminal material, retry counts,
+  catalog independence, and streaming fidelity.
+- Added an offline regression for the official stateless compact-output replay
+  shape and retained the explicitly live-gated compaction structural smoke test.
+
+### Packaging
+- Bumped the local-install package to `0.6.0` and refreshed the locked
+  development compatibility baseline.
+- Built the wheel and source distribution offline and verified the wheel's
+  installed version, default model, and raw-response surface.
 
 ## [0.5.1] - 2026-08-11
 

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Iterable
 from typing import Any, Optional
 
+import requests
 from pydantic import BaseModel
 
+from .._exceptions import APIConnectionError, APIError, APIResponseValidationError
 from .._models import (
     CodexBaseModel,
     Response,
@@ -15,7 +16,6 @@ from .._models import (
     ResponseStreamEvent,
     ResponseUsage,
     ServiceTier,
-    TokenDetails,
 )
 from .._utils import (
     _UNSET,
@@ -60,17 +60,25 @@ class ResponsesCreateRequest(CodexBaseModel):
         )
         reasoning = None if not _is_given(params["reasoning"]) else params["reasoning"]
         text = None if not _is_given(params["text"]) else params["text"]
-        tool_choice = "auto" if not _is_given(params["tool_choice"]) else params["tool_choice"]
-        if tools:
+        tool_choice_given = _is_given(params["tool_choice"])
+        tool_choice = params["tool_choice"] if tool_choice_given else (
+            "auto" if tools else "none"
+        )
+        if tool_choice_given or tools:
             _validate_tool_choice(tool_choice, tools)
-        parallel_tool_calls = bool(_default(params["parallel_tool_calls"], False)) if tools else False
+        parallel_tool_calls = bool(_default(params["parallel_tool_calls"], False))
+        instructions = (
+            params["instructions"]
+            if _is_given(params["instructions"])
+            else client_defaults["instructions"] or ""
+        )
 
         payload = {
             "model": _default(params["model"], client_defaults["model"]),
-            "instructions": _default(params["instructions"], client_defaults["instructions"]) or "",
+            "instructions": instructions,
             "input": input_items,
             "tools": tools,
-            "tool_choice": tool_choice if tools else "none",
+            "tool_choice": tool_choice,
             "parallel_tool_calls": parallel_tool_calls,
             "store": False,
             "stream": True,
@@ -109,50 +117,49 @@ class ResponsesCreateRequest(CodexBaseModel):
 def collect_response(
     events: Iterable[ResponseStreamEvent],
     *,
-    request: ResponsesCreateRequest,
+    http_response: requests.Response,
 ) -> Response:
-    output: list[dict[str, Any]] = []
-    text_parts: list[str] = []
-    completed: Optional[dict[str, Any]] = None
+    terminal: Optional[dict[str, Any]] = None
 
     for event in events:
-        if event.type in {"response.output_text.delta", "response.content_part.delta"}:
-            text_parts.append(_event_delta_text(event))
-        elif event.type == "response.output_item.done" and isinstance(getattr(event, "item", None), dict):
-            output.append(event.item)
-        elif event.type == "response.completed":
-            completed = _event_response_dict(event)
-        elif event.type in {"response.failed", "error"}:
-            raise RuntimeError(_event_error_message(event))
+        if event.type in {
+            "response.completed",
+            "response.failed",
+            "response.incomplete",
+        }:
+            if terminal is not None:
+                raise APIResponseValidationError(
+                    http_response,
+                    body=None,
+                    message="Response stream contained more than one terminal event.",
+                )
+            terminal = _event_response_dict(event)
+            if terminal is None:
+                raise APIResponseValidationError(
+                    http_response,
+                    body=None,
+                    message="Terminal response event did not contain a Response object.",
+                )
+        elif event.type == "error":
+            body = getattr(event, "error", None)
+            if not isinstance(body, dict):
+                body = {
+                    key: value
+                    for key in ("code", "message", "param")
+                    if (value := getattr(event, key, None)) is not None
+                }
+            raise APIError(
+                str(body.get("message", "Response stream failed.")),
+                _prepared_request(http_response),
+                body=body,
+            )
 
-    if not any(item.get("type") == "message" for item in output) and text_parts:
-        output.append({
-            "type": "message",
-            "role": "assistant",
-            "content": [{"type": "output_text", "text": "".join(text_parts)}],
-        })
-
-    raw = completed or {}
-    return Response(
-        id=raw.get("id", ""),
-        created_at=raw.get("created_at", time.time()),
-        completed_at=raw.get("completed_at", time.time()),
-        error=raw.get("error"),
-        incomplete_details=raw.get("incomplete_details"),
-        instructions=raw.get("instructions", request.instructions),
-        model=raw.get("model", request.model),
-        output=raw.get("output") or output,
-        parallel_tool_calls=raw.get("parallel_tool_calls", request.parallel_tool_calls),
-        tool_choice=raw.get("tool_choice", request.tool_choice),
-        tools=raw.get("tools", request.tools),
-        prompt_cache_key=raw.get("prompt_cache_key", request.prompt_cache_key),
-        prompt_cache_retention=raw.get("prompt_cache_retention"),
-        reasoning=raw.get("reasoning"),
-        service_tier=raw.get("service_tier"),
-        status=raw.get("status", "completed"),
-        text=raw.get("text", request.text),
-        usage=_usage_from_backend(raw.get("usage")),
-    )
+    if terminal is None:
+        raise APIConnectionError(
+            message="Response stream ended without a terminal response event.",
+            request=_prepared_request(http_response),
+        )
+    return Response.model_validate(terminal)
 
 
 def _validate_create_service_tier(value: Any) -> Optional[ServiceTier]:
@@ -257,19 +264,7 @@ def normalize_reasoning(reasoning: Any) -> dict[str, Any]:
 
 
 def normalize_text(text: Any) -> dict[str, Any]:
-    text_dict = _as_dict(text)
-    fmt = text_dict.get("format")
-    if isinstance(fmt, dict) and fmt.get("type") == "json_schema":
-        schema = fmt.get("schema")
-        if schema is not None and "title" not in schema and fmt.get("name"):
-            schema = {**schema, "title": fmt["name"]}
-        text_dict["format"] = {
-            "type": "json_schema",
-            "name": fmt.get("name") or (schema or {}).get("title", "output"),
-            "schema": schema,
-            "strict": fmt.get("strict", True),
-        }
-    return text_dict
+    return _as_dict(text)
 
 
 def merge_text_format(text: Any, fmt: ResponseFormatJsonSchema) -> dict[str, Any]:
@@ -298,28 +293,11 @@ def pydantic_to_format(model_class: type[Any]) -> ResponseFormatJsonSchema:
     )
 
 
-def _event_delta_text(event: ResponseStreamEvent) -> str:
-    delta = getattr(event, "delta", None)
-    if isinstance(delta, str):
-        return delta
-    if isinstance(delta, dict):
-        return delta.get("text", "")
-    return ""
-
-
-def _event_response_dict(event: ResponseStreamEvent) -> dict[str, Any]:
+def _event_response_dict(event: ResponseStreamEvent) -> Optional[dict[str, Any]]:
     response = getattr(event, "response", None)
     if isinstance(response, BaseModel):
         return response.model_dump()
-    return response if isinstance(response, dict) else {}
-
-
-def _event_error_message(event: ResponseStreamEvent) -> str:
-    response = _event_response_dict(event)
-    error = response.get("error") or getattr(event, "error", None) or {}
-    if isinstance(error, dict):
-        return error.get("message", "Response failed")
-    return str(error)
+    return response if isinstance(response, dict) else None
 
 
 def _message(role: str, content: list[dict[str, Any]]) -> dict[str, Any]:
@@ -362,16 +340,17 @@ def _ensure_strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-def _usage_from_backend(raw: Any) -> ResponseUsage:
-    raw = raw or {}
-    return ResponseUsage(
-        input_tokens=raw.get("input_tokens", 0),
-        output_tokens=raw.get("output_tokens", 0),
-        total_tokens=raw.get("total_tokens", 0),
-        input_tokens_details=TokenDetails(
-            cached_tokens=(raw.get("input_tokens_details") or {}).get("cached_tokens", 0),
-        ),
-        output_tokens_details=TokenDetails(
-            reasoning_tokens=(raw.get("output_tokens_details") or {}).get("reasoning_tokens", 0),
-        ),
-    )
+def _usage_from_backend(raw: Any) -> Optional[ResponseUsage]:
+    if raw is None:
+        return None
+    return ResponseUsage.model_validate(raw)
+
+
+def _prepared_request(response: requests.Response) -> requests.PreparedRequest:
+    if response.request is None:
+        return requests.Request(
+            "POST",
+            response.url
+            or "https://chatgpt.com/backend-api/codex/responses",
+        ).prepare()
+    return response.request

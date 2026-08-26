@@ -16,10 +16,11 @@ response = client.responses.create(input="Hello")
 The adapter's client default is the explicit `gpt-5.6-sol` model ID. Supplying
 `model=` at client construction or on an individual request continues to
 override that default. This is the current checkout contract, not a claim of
-universal backend availability. It is included in the `0.5.1` checkpoint.
+universal backend availability. It is included in the `0.6.0` checkpoint.
 
-The public compatibility baseline was checked on 2026-08-09 against the locally
-installed `openai` 2.46.0 package and the official [Responses create
+The public compatibility baseline is pinned to exact `openai==2.46.0` in the
+development extra and was differentially checked on 2026-08-26 with local mock
+transports against the official [Responses create
 reference](https://developers.openai.com/api/reference/resources/responses/methods/create).
 The official reference demonstrates the same `OpenAI()` client,
 `client.responses.create(...)` call, `Response` shape, and iterator-based
@@ -31,6 +32,9 @@ The official reference demonstrates the same `OpenAI()` client,
   adapter-specific read-only `.authenticate()` step. The client supports
   `close()` and context-manager cleanup for its owned HTTP session.
 - `client.responses.create(...)` for non-streaming and `stream=True` calls.
+- `client.responses.with_raw_response.create(...)` with the pinned official
+  wrapper shape for request bytes, safe HTTP metadata, request ID, received
+  bytes, and `.parse()`.
 - `client.responses.parse(...)` for Pydantic structured output.
 - `client.responses.compact(...)` for the approved Codex compact route.
 - `client.models.list()` and `client.models.retrieve(...)`.
@@ -39,6 +43,35 @@ The official reference demonstrates the same `OpenAI()` client,
 - Explicit local rejection of official parameters that the Codex backend does
   not support. `max_output_tokens` must raise and must never be silently dropped
   or reinterpreted.
+
+For the supported canonical request shape, explicit model, input items,
+function tools, tool choice, parallel-tool setting, `store=false`, reasoning
+effort (including `medium` and `low`), include list, and text/schema object
+survive preparation without value substitution. The backend requires
+`stream=true` on the wire even for a public non-streaming call, and CBS
+normalizes shorthand string/message input to the backend's explicit item shape.
+Those two adaptations are visible in `raw.http_request.body`.
+
+For a non-streaming call, CBS validates only the full Response carried by one
+terminal `response.completed`, `response.failed`, or `response.incomplete`
+event. It does not reconstruct or fill model names, response IDs, timestamps,
+status, usage, request echoes, or output from local state or delta events.
+Missing terminal fields therefore remain unset/`None` just as sparse official
+models do. A missing terminal event is an `APIConnectionError`; malformed SSE
+is an `APIResponseValidationError`.
+
+HTTP failures use the pinned official public taxonomy (`BadRequestError`,
+`AuthenticationError`, `PermissionDeniedError`, `NotFoundError`,
+`ConflictError`, `UnprocessableEntityError`, `RateLimitError`, and
+`InternalServerError`). Safe request IDs and backend error bodies remain on the
+status exception. Transport timeouts and connection failures use
+`APITimeoutError` and `APIConnectionError`.
+
+`max_retries` applies to Responses creation with the pinned official retry
+conditions: connection/timeouts, 408, 409, 429, 5xx, and explicit
+`x-should-retry`. `max_retries=0` performs at most one transport attempt; the
+default is two retries. This does not provide exactly-once delivery after an
+ambiguous failure. Compaction POSTs retain their existing no-retry behavior.
 
 ### Service-tier subset
 
@@ -111,7 +144,10 @@ API drift:
   or custom base URLs.
 - Only the approved Codex Responses, compact, and model-list routes exist.
 - Caller-provided headers, query parameters, extra bodies, redirects, proxies,
-  and raw transport access are unavailable.
+  and generic raw transport access are unavailable. The standard
+  `responses.with_raw_response.create(...)` wrapper is supported, but its
+  retained request strips bearer/account headers and its response strips
+  credential-bearing headers such as cookies.
 - Hosted tools and all resources outside the narrow Responses/Models subset are
   rejected or absent.
 - Stateful Platform response chaining is unavailable; callers carry prior input
@@ -124,14 +160,18 @@ API drift:
 
 ## Current parity snapshot
 
-A signature comparison with locally installed `openai` 2.46.0 found these
-remaining gaps. They are compatibility backlog, not permission to add unrelated
-public APIs:
+A signature and mock-transport comparison with pinned `openai==2.46.0` found
+these remaining gaps. They are compatibility backlog, not permission to add
+unrelated public APIs:
 
 - The constructors share `timeout` and `max_retries`. The official credential,
   base-URL, header/query, WebSocket, and custom-client parameters are
   intentionally unavailable; this adapter instead adds `model`, `instructions`,
   and `retry_base_delay` defaults.
+- CBS uses `requests` rather than the official client's `httpx` transport, caps
+  retry configuration/delays for agent safety, and sanitizes credentials from
+  retained request objects. The raw wrapper is therefore API-shaped and
+  behaviorally comparable but not the official concrete HTTP response type.
 - `responses.create(...)` shares every currently exposed parameter name with the
   official method. The official method additionally has `moderation`,
   `prompt_cache_options`, and the intentionally unsafe `extra_headers`,
@@ -166,6 +206,7 @@ they must never weaken the agent-safe boundary.
 5. Add compatibility regression tests for any changed public signature, return
    model, or streaming behavior. Compare against a pinned `openai-python`
    version during an intentional compatibility update; do not make the official
-   package a runtime dependency merely for parity checks.
+   package a runtime dependency merely for parity checks. Keep the exact
+   baseline in the development extra.
 6. Keep repair validation, retry/stopping policy, experiment orchestration, and
    custody records outside CBS. Do not add a proprietary continuation method.

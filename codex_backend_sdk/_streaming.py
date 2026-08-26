@@ -8,13 +8,21 @@ from typing import Any, Optional
 
 import requests
 
+from ._exceptions import APIResponseValidationError
 from ._models import ResponseStreamEvent
 
 
 def stream_response_events(response: requests.Response) -> Iterator[ResponseStreamEvent]:
     try:
-        for payload in iter_sse_payloads(response):
-            yield ResponseStreamEvent.model_validate(payload)
+        try:
+            for payload in iter_sse_payloads(response):
+                yield ResponseStreamEvent.model_validate(payload)
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError) as exc:
+            raise APIResponseValidationError(
+                response,
+                body=None,
+                message="Response stream contained an invalid SSE event.",
+            ) from exc
     finally:
         response.close()
 
@@ -46,8 +54,7 @@ def loads_sse_data(data_lines: list[str]) -> Optional[dict[str, Any]]:
     data = "\n".join(data_lines)
     if data == "[DONE]":
         return None
-    try:
-        payload = json.loads(data)
-    except json.JSONDecodeError:
-        return None
-    return payload if isinstance(payload, dict) else None
+    payload = json.loads(data)
+    if not isinstance(payload, dict):
+        raise TypeError("SSE data must decode to a JSON object")
+    return payload

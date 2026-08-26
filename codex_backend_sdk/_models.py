@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Iterator
 from typing import Any, Generic, Literal, Optional, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 ReasoningEffort = Literal["minimal", "low", "medium", "high", "xhigh"]
 ReasoningSummary = Literal["concise", "detailed", "auto"]
@@ -68,16 +67,17 @@ class Reasoning(CodexBaseModel):
 
 
 class TokenDetails(CodexBaseModel):
-    cached_tokens: int = 0
-    reasoning_tokens: int = 0
+    cached_tokens: Optional[int] = None
+    cache_write_tokens: Optional[int] = None
+    reasoning_tokens: Optional[int] = None
 
 
 class ResponseUsage(CodexBaseModel):
-    input_tokens: int = 0
-    output_tokens: int = 0
-    total_tokens: int = 0
-    input_tokens_details: TokenDetails = Field(default_factory=TokenDetails)
-    output_tokens_details: TokenDetails = Field(default_factory=TokenDetails)
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+    input_tokens_details: Optional[TokenDetails] = None
+    output_tokens_details: Optional[TokenDetails] = None
 
 
 class ResponseFormatJsonSchema(CodexBaseModel):
@@ -89,19 +89,19 @@ class ResponseFormatJsonSchema(CodexBaseModel):
 
 
 class Response(CodexBaseModel):
-    id: str
-    created_at: float = Field(default_factory=time.time)
+    id: Optional[str] = None
+    created_at: Optional[float] = None
     error: Optional[dict[str, Any]] = None
     incomplete_details: Optional[dict[str, Any]] = None
     instructions: Any = None
     metadata: Optional[dict[str, Any]] = None
     model: Optional[str] = None
-    object: Literal["response"] = "response"
-    output: list[dict[str, Any]] = Field(default_factory=list)
-    parallel_tool_calls: bool = False
+    object: Optional[Literal["response"]] = None
+    output: Optional[list[dict[str, Any]]] = None
+    parallel_tool_calls: Optional[bool] = None
     temperature: Optional[float] = None
-    tool_choice: Any = "auto"
-    tools: list[dict[str, Any]] = Field(default_factory=list)
+    tool_choice: Any = None
+    tools: Optional[list[dict[str, Any]]] = None
     top_p: Optional[float] = None
     background: Optional[bool] = None
     completed_at: Optional[float] = None
@@ -115,17 +115,18 @@ class Response(CodexBaseModel):
     reasoning: Optional[Reasoning] = None
     safety_identifier: Optional[str] = None
     service_tier: Optional[str] = None
-    status: Optional[str] = "completed"
+    status: Optional[str] = None
     text: Any = None
     top_logprobs: Optional[int] = None
     truncation: Optional[str] = None
-    usage: Optional[ResponseUsage] = Field(default_factory=ResponseUsage)
+    usage: Optional[ResponseUsage] = None
     user: Optional[str] = None
+    _request_id: Optional[str] = PrivateAttr(default=None)
 
     @property
     def output_text(self) -> str:
         texts: list[str] = []
-        for output in self.output:
+        for output in self.output or []:
             if output.get("type") == "message":
                 for content in output.get("content", []):
                     if content.get("type") == "output_text":
@@ -135,7 +136,7 @@ class Response(CodexBaseModel):
     @property
     def reasoning_summary(self) -> str | None:
         texts: list[str] = []
-        for output in self.output:
+        for output in self.output or []:
             if output.get("type") == "reasoning":
                 for summary in output.get("summary", []):
                     if isinstance(summary, dict):
@@ -144,7 +145,11 @@ class Response(CodexBaseModel):
 
     @property
     def tool_calls(self) -> list[dict[str, Any]]:
-        return [output for output in self.output if output.get("type") == "function_call"]
+        return [
+            output
+            for output in self.output or []
+            if output.get("type") == "function_call"
+        ]
 
 
 class ParsedResponse(CodexBaseModel, Generic[ParsedT]):
@@ -152,7 +157,7 @@ class ParsedResponse(CodexBaseModel, Generic[ParsedT]):
     output_parsed: ParsedT
 
     @property
-    def id(self) -> str:
+    def id(self) -> Optional[str]:
         return self.response.id
 
     @property
@@ -160,7 +165,7 @@ class ParsedResponse(CodexBaseModel, Generic[ParsedT]):
         return self.response.model
 
     @property
-    def output(self) -> list[dict[str, Any]]:
+    def output(self) -> Optional[list[dict[str, Any]]]:
         return self.response.output
 
     @property

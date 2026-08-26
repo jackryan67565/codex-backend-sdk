@@ -2,7 +2,24 @@
 
 from __future__ import annotations
 
+from ._api_response import APIResponse, LegacyAPIResponse
 from ._client import CodexClient, OpenAI
+from ._exceptions import (
+    APIConnectionError,
+    APIError,
+    APIResponseValidationError,
+    APIStatusError,
+    APITimeoutError,
+    AuthenticationError,
+    BadRequestError,
+    ConflictError,
+    InternalServerError,
+    NotFoundError,
+    OpenAIError,
+    PermissionDeniedError,
+    RateLimitError,
+    UnprocessableEntityError,
+)
 from ._models import (
     CodexBaseModel,
     CompactedResponse,
@@ -23,13 +40,28 @@ from ._models import (
 from ._utils import CodexBackendUnsupportedParameterError, image_b64, image_url
 
 __all__ = [
+    "APIConnectionError",
+    "APIError",
+    "APIResponse",
+    "APIResponseValidationError",
+    "APIStatusError",
+    "APITimeoutError",
+    "AuthenticationError",
+    "BadRequestError",
     "CodexBackendUnsupportedParameterError",
     "CodexBaseModel",
     "CodexClient",
     "CompactedResponse",
+    "ConflictError",
+    "InternalServerError",
+    "LegacyAPIResponse",
     "Model",
     "OpenAI",
+    "OpenAIError",
+    "NotFoundError",
     "ParsedResponse",
+    "PermissionDeniedError",
+    "RateLimitError",
     "Reasoning",
     "ReasoningContext",
     "ReasoningEffort",
@@ -40,6 +72,7 @@ __all__ = [
     "ResponseUsage",
     "ServiceTier",
     "SyncPage",
+    "UnprocessableEntityError",
     "Verbosity",
     "image_b64",
     "image_url",

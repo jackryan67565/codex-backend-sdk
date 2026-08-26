@@ -33,6 +33,8 @@ to override it. This local default does not guarantee availability for every
 ChatGPT account or rollout.
 
 The compatibility target is the supported subset, not the full official SDK.
+Release 0.6.0 pins `openai==2.46.0` as its differential-test baseline; the
+official package is a development dependency, not a runtime dependency.
 Authentication uses a read-only Codex login instead of an API key, and the
 agent-safe boundary intentionally rejects unsupported resources, hosted tools,
 caller headers/query/body, custom base URLs, and backend-incompatible official
@@ -63,7 +65,7 @@ The client does not expose or connect to:
 - Codex Cloud tasks, turns, environments, configuration, or quota controls;
 - file uploads, audio transcription, image generation/editing, or embeddings;
 - Realtime calls, WebSockets, connection headers, or API-key material;
-- OAuth login, token refresh, credential writes, raw request helpers, custom
+- OAuth login, token refresh, credential writes, generic raw request helpers, custom
   base URLs, redirects, proxies, caller headers, or caller query parameters;
 - hosted web-search, computer-use, or MCP tools.
 
@@ -82,8 +84,8 @@ cache directly, and code that receives unrestricted network permission can
 construct its own HTTP client. Use OS/Codex filesystem permissions and a trusted
 credential broker when executing untrusted agents.
 
-Never print, log, copy, or commit `$CODEX_HOME/auth.json`, request headers, or
-authenticated response bodies.
+Never print, log, copy, or commit `$CODEX_HOME/auth.json`, prepared
+authentication headers, or authenticated response bodies.
 
 See the current [agent-safety security review](security_best_practices_report.md)
 for the reviewed boundary, remediations, and deployment requirements.
@@ -102,22 +104,22 @@ cd codex-backend-sdk
 pip install -e .
 ```
 
-### Install the 0.5.1 wheel in another project
+### Install the 0.6.0 wheel in another project
 
 Release artifacts are built locally into the Git-ignored `dist/` directory.
-Install the `0.5.1` wheel directly into a target project's virtual environment:
+Install the `0.6.0` wheel directly into a target project's virtual environment:
 
 ```bash
 uv pip install \
   --python /absolute/path/to/project/.venv/bin/python \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.5.1-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.6.0-py3-none-any.whl
 ```
 
 Or, when that virtual environment includes pip:
 
 ```bash
 /absolute/path/to/project/.venv/bin/python -m pip install \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.5.1-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.6.0-py3-none-any.whl
 ```
 
 Because `dist/` is not tracked, a fresh clone may not contain the artifact.
@@ -195,6 +197,48 @@ print(response.output_text)
 
 The adapter does not inject a reasoning effort when one is omitted; effective
 behavior remains backend-authoritative.
+
+The non-streaming result is parsed only from the backend's terminal
+`response.completed`, `response.failed`, or `response.incomplete` event. CBS
+does not fill missing model names, IDs, timestamps, statuses, usage, request
+echoes, or output items from local request state or intermediate deltas.
+
+### Raw Responses access
+
+The pinned official-client-shaped raw wrapper exposes the submitted application
+body, safe HTTP metadata, and the received body before parsing:
+
+```python
+raw = client.responses.with_raw_response.create(
+    input="Hello",
+    reasoning={"effort": "low"},
+    store=False,
+)
+
+print(raw.status_code, raw.request_id)
+submitted_body = raw.http_request.content
+response = raw.parse()
+```
+
+`raw.http_request.content` (and the Requests-native `.body`) contains the exact
+JSON bytes CBS submitted. The retained request deliberately omits
+`Authorization` and `ChatGPT-Account-ID`,
+and credential-bearing response headers such as cookies are removed. This is a
+security difference from the official client; CBS does not expose a generic
+transport or prepared authentication headers. Raw bodies may contain sensitive
+model input or output and should not be logged.
+
+HTTP status failures use the official error categories exported by the package,
+including `BadRequestError`, `AuthenticationError`, `RateLimitError`, and
+`InternalServerError`. Status errors preserve the backend error body and safe
+request ID. Timeouts and connection failures raise `APITimeoutError` and
+`APIConnectionError`.
+
+The client default is `max_retries=2`, matching the pinned official client's
+retry-count default for this path. Set `max_retries=0` when a caller requires at
+most one transport attempt. Any automatic replay after an ambiguous transport
+failure can duplicate a request the backend already accepted; CBS reports the
+configured behavior and does not claim exactly-once delivery.
 
 ### Service tier
 
@@ -360,9 +404,12 @@ SDK-owned sessions:
 - validate the exact method, host, and path before every request;
 - attach authentication and account routing headers internally;
 - do not accept caller-provided headers, query parameters, or base URLs;
-- retry only idempotent model-catalog reads, never Responses POSTs;
-- require finite positive timeouts of at most ten minutes, cap model-read
-  retries at five, and cap each retry delay at 60 seconds;
+- honor the configured official `max_retries` semantics for model reads and
+  Responses creation; `max_retries=0` permits at most one transport attempt;
+- retry Responses only for connection/timeouts, HTTP 408, 409, 429, 5xx, or an
+  explicit `x-should-retry: true`; compaction POSTs remain non-retryable;
+- require finite positive timeouts of at most ten minutes, cap retry counts at
+  five, and use the pinned official client's eight-second backoff cap;
 - connect only to `chatgpt.com` over HTTPS on port 443.
 
 URLs inside model input are payload data sent to OpenAI. This SDK does not fetch

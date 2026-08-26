@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codex-backend-sdk"
-version = "0.5.1"
+version = "0.6.0"
 description = "Agent-safe Python client for the ChatGPT Codex Responses backend"
 readme = "README.md"
 license = { text = "MIT" }
@@ -32,7 +32,7 @@ Documentation = "https://github.com/jackryan67565/codex-backend-sdk#readme"
 Issues = "https://github.com/jackryan67565/codex-backend-sdk/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+dev = ["openai==2.46.0", "pytest>=7.0"]
 
 [tool.pytest.ini_options]
 markers = [

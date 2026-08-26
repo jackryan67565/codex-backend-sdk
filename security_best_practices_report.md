@@ -6,8 +6,10 @@ The current worktree has been contracted from a broad ChatGPT backend SDK to a
 narrow agent-use client. Repository-managed connections are limited to Codex
 model discovery, Responses, and Responses compaction. Credential lifecycle,
 account data, Cloud history, state mutation, arbitrary uploads, Platform APIs,
-Realtime material, raw transports, hosted tools, and implicit live testing have
-been removed or rejected below the public resource layer.
+Realtime material, generic raw transports, hosted tools, and implicit live
+testing have been removed or rejected below the public resource layer. The
+official-compatible Responses raw wrapper exposes only a sanitized retained
+request and response; it never exposes authentication headers.
 
 No unresolved critical or high-severity issue remains in the SDK-managed
 surface reviewed here. The package is still not a sandbox for hostile Python
@@ -70,28 +72,31 @@ offline and does not load the user's credential cache.
 Only caller-executed `function` tools and matching function choices are
 accepted. Web-search, computer-use, MCP, and other hosted tool types fail before
 transport
-([`codex_backend_sdk/resources/_responses_payloads.py:218`](codex_backend_sdk/resources/_responses_payloads.py#L218)).
+([`codex_backend_sdk/resources/_responses_payloads.py:225`](codex_backend_sdk/resources/_responses_payloads.py#L225)).
 
 ### AS-009 — Credentials retained by transport exceptions — Remediated
 
 Requests exceptions and responses can retain their prepared request. The
 transport now removes the bearer and account-routing headers from those stored
 request objects immediately after transmission and before a response or
-exception escapes. Existing status, timeout, and connection exception classes
-remain available without carrying the credentials
-([`codex_backend_sdk/_transport.py:47`](codex_backend_sdk/_transport.py#L47)).
+exception escapes. Official-compatible status, timeout, and connection error
+categories remain available without carrying the credentials
+([`codex_backend_sdk/_transport.py:66`](codex_backend_sdk/_transport.py#L66)).
 Synthetic offline coverage exercises status, redirect, timeout, and connection
 failures across all three resources
-([`tests/test_transport_sanitization.py:75`](tests/test_transport_sanitization.py#L75)).
+([`tests/test_transport_sanitization.py:81`](tests/test_transport_sanitization.py#L81)).
 
 ## Medium findings
 
-### AS-006 — Automatic replay of non-idempotent Responses POSTs — Remediated
+### AS-006 — Uncontrolled replay of Responses POSTs — Remediated
 
-Retries are restricted to idempotent methods. Responses and compaction POSTs
-are never replayed after ambiguous timeouts, connection failures, rate limits,
-or server errors
-([`codex_backend_sdk/_transport.py:43`](codex_backend_sdk/_transport.py#L43)).
+Responses creation now follows the pinned official client's configured retry
+semantics, while compaction POSTs remain non-retryable. Retry counts remain
+bounded at five, the retryable conditions are closed, and `max_retries=0`
+provides an explicit at-most-one-attempt mode. Callers must treat a replay after
+an ambiguous transport failure as potentially duplicating an accepted request;
+the SDK does not claim exactly-once delivery
+([`codex_backend_sdk/_transport.py:34`](codex_backend_sdk/_transport.py#L34)).
 
 ### AS-007 — Credential-cache overreach and mutation — Remediated
 
@@ -105,14 +110,14 @@ cache ([`codex_backend_sdk/_storage.py:56`](codex_backend_sdk/_storage.py#L56),
 ### AS-008 — Agent-controlled indefinite waits and retry amplification — Remediated
 
 Constructor and per-call timeouts must be finite, positive, and at most ten
-minutes. Model-read retries are capped at five and individual delays at 60
-seconds; non-idempotent requests remain non-retryable
-([`codex_backend_sdk/_client.py:186`](codex_backend_sdk/_client.py#L186),
-[`codex_backend_sdk/_transport.py:101`](codex_backend_sdk/_transport.py#L101)).
+minutes. Model-read and Responses retry counts are capped at five, individual
+backoff delays at eight seconds, and compaction remains non-retryable
+([`codex_backend_sdk/_client.py:41`](codex_backend_sdk/_client.py#L41),
+[`codex_backend_sdk/_transport.py:154`](codex_backend_sdk/_transport.py#L154)).
 
 ## Verification evidence
 
-- Offline suite on 2026-08-11: `113 passed, 12 skipped`.
+- Offline suite on 2026-08-26: `144 passed, 13 skipped`.
 - Python compilation completed for `codex_backend_sdk` and `tests`.
 - `git diff --check` completed without whitespace errors.
 - Source URL scan found one connection base:
@@ -120,7 +125,7 @@ seconds; non-idempotent requests remain non-retryable
 - Negative tests cover retired modules/resources, credential exports,
   credential representations, symlinked auth files, stale credentials, unsafe
   routes and methods, caller headers/query, hosted tools, redirects, proxy
-  inheritance, non-idempotent retries, retained-request credential
+  inheritance, configured Responses retries, retained-request credential
   sanitization, and response cleanup.
 
 ## Deployment requirement

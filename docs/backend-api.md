@@ -22,11 +22,13 @@ Only port 443 is accepted. Redirects, URL user information, fragments,
 environment proxies, caller base URLs, caller headers, and caller query
 parameters are rejected or absent from the public surface.
 
-Only idempotent model-catalog reads are retried. Responses and compaction POSTs
-are never replayed automatically after a timeout, connection failure, 429, or
-5xx response because the backend may already have accepted the first request.
-Timeouts must be finite and positive, are capped at ten minutes, model-read
-retries are capped at five, and each retry delay is capped at 60 seconds.
+Model-catalog reads and Responses creation honor the configured `max_retries`;
+compaction POSTs remain non-retryable. Responses use the pinned official-client
+retry conditions: connection/timeouts, 408, 409, 429, 5xx, or explicit
+`x-should-retry: true`. `max_retries=0` permits at most one transport attempt.
+Automatic replay cannot prove exactly-once delivery because the backend may
+already have accepted an ambiguously failed attempt. Timeouts are capped at ten minutes,
+retry counts at five, and exponential backoff at eight seconds.
 
 `codex_backend_sdk._network.validate_agent_sdk_request` enforces both method and
 route before `requests` opens a connection.
@@ -71,7 +73,8 @@ After a request is sent, the transport removes `Authorization` and
 `ChatGPT-Account-ID` from retained Requests request, response, and exception
 objects before they can escape the SDK. The headers still exist on the wire;
 this cleanup reduces accidental credential retention rather than changing
-authentication.
+authentication. Credential-bearing response metadata such as `Set-Cookie` and
+authentication challenges is also removed before public raw/error access.
 
 ## `GET /backend-api/codex/models`
 
@@ -87,15 +90,28 @@ five minutes. `force_refresh=True` bypasses the local cache.
 No account, quota, task, or conversation route is consulted during model
 discovery.
 
+Catalog contents are not used to preflight Responses models. A model omitted
+from enumeration is still submitted when the caller explicitly names it; only
+the Responses backend can accept or reject that request.
+
 ## `POST /backend-api/codex/responses`
 
 **SDK methods:**
 
 - `client.responses.create(...)`
+- `client.responses.with_raw_response.create(...)`
 - `client.responses.parse(...)`
 
 The backend streams SSE. A non-streaming SDK call collects those events into a
 typed `Response`; `stream=True` returns the event iterator.
+
+The collector accepts exactly one terminal `response.completed`,
+`response.failed`, or `response.incomplete` event and validates its embedded
+Response directly. It does not reconstruct output from deltas or fill model,
+ID, timestamps, status, usage, request echoes, or output from local request
+state. A stream ending without a terminal event is an `APIConnectionError`;
+invalid SSE is an `APIResponseValidationError`. Streaming callers receive the
+backend event payloads in order, including unknown backend fields.
 
 With the default client settings, the prepared payload includes:
 
@@ -118,7 +134,25 @@ the undocumented backend exposes that model to every account or rollout.
 
 Supported optional fields are normalized before transmission. Parameters known
 to be unsupported by this backend raise locally rather than being silently
-ignored.
+ignored. Canonical explicit input items, function tools, `store=false`, text and
+schema objects, and reasoning efforts including `medium` and `low` retain their
+values. `max_output_tokens` remains an explicit pre-transport error because no
+verified Codex-backend equivalent exists.
+
+### Raw response and errors
+
+`responses.with_raw_response.create(...)` returns the pinned
+`openai==2.46.0`-shaped synchronous raw wrapper. It exposes status, safe headers,
+request ID, URL/method, exact submitted application-body bytes, received body
+bytes/text, retry count, and `.parse()`. Its retained prepared request has the
+bearer and account-routing headers removed, and its retained response has
+credential-bearing headers removed. This intentional security difference means
+it is not a generic raw transport or a way to obtain authentication headers.
+
+HTTP failures use official-style status categories and preserve the backend
+error body plus safe request ID. Timeouts and connection failures use
+`APITimeoutError` and `APIConnectionError`. Raw or error bodies can contain
+sensitive input/output and must not be logged.
 
 ### Service tier
 
@@ -199,8 +233,9 @@ detail fields, and the parsed response matched them. Zero cached tokens is a
 measurement for these short prompts, not evidence that replay is discounted.
 The four instrumented capability-probe POSTs each recorded exactly one
 transport attempt with `max_retries=0`. The patched two-call smoke test also
-used `max_retries=0`; Responses POSTs remain non-retryable even when the client
-is configured with a higher model-read retry count.
+used `max_retries=0`; those dated measurements therefore remain one-attempt
+evidence. In the current client, higher configured values enable the bounded
+Responses retry policy described above.
 
 ### Tools
 

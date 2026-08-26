@@ -1,21 +1,37 @@
 """Agent-safe, unofficial Python client for the ChatGPT Codex backend.
 
 The public package intentionally exposes only stateless Responses and model
-discovery. It does not export credential objects, raw transports, account data,
-uploads, Realtime connection material, or state-changing ChatGPT resources.
+discovery. It does not export credential objects, generic raw transports,
+account data, uploads, Realtime connection material, or state-changing ChatGPT
+resources. The standard Responses raw wrapper is sanitized before exposure.
 """
 
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 
 from ._network import OpenAINetworkPolicyError
 from .codex_client import (
+    APIConnectionError,
+    APIError,
+    APIResponse,
+    APIResponseValidationError,
+    APIStatusError,
+    APITimeoutError,
+    AuthenticationError,
+    BadRequestError,
     CodexBackendUnsupportedParameterError,
     CodexBaseModel,
     CodexClient,
     CompactedResponse,
+    ConflictError,
+    InternalServerError,
+    LegacyAPIResponse,
     Model,
     OpenAI,
+    OpenAIError,
+    NotFoundError,
     ParsedResponse,
+    PermissionDeniedError,
+    RateLimitError,
     Reasoning,
     ReasoningContext,
     ReasoningEffort,
@@ -26,20 +42,36 @@ from .codex_client import (
     ResponseUsage,
     ServiceTier,
     SyncPage,
+    UnprocessableEntityError,
     Verbosity,
     image_b64,
     image_url,
 )
 
 __all__ = [
+    "APIConnectionError",
+    "APIError",
+    "APIResponse",
+    "APIResponseValidationError",
+    "APIStatusError",
+    "APITimeoutError",
+    "AuthenticationError",
+    "BadRequestError",
     "CodexBackendUnsupportedParameterError",
     "CodexBaseModel",
     "CodexClient",
     "CompactedResponse",
+    "ConflictError",
+    "InternalServerError",
+    "LegacyAPIResponse",
     "Model",
     "OpenAI",
+    "OpenAIError",
     "OpenAINetworkPolicyError",
+    "NotFoundError",
     "ParsedResponse",
+    "PermissionDeniedError",
+    "RateLimitError",
     "Reasoning",
     "ReasoningContext",
     "ReasoningEffort",
@@ -50,6 +82,7 @@ __all__ = [
     "ResponseUsage",
     "ServiceTier",
     "SyncPage",
+    "UnprocessableEntityError",
     "Verbosity",
     "image_b64",
     "image_url",

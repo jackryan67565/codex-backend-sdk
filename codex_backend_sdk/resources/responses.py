@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from functools import cached_property, wraps
 from typing import TYPE_CHECKING, Any, Optional
 
+from .._api_response import LegacyAPIResponse
 from .._models import (
     CompactedResponse,
     ParsedResponse,
@@ -13,7 +15,13 @@ from .._models import (
     ServiceTier,
 )
 from .._streaming import stream_response_events
-from .._utils import _UNSET, _default, _is_given, _reject_backend_unsupported
+from .._utils import (
+    _UNSET,
+    CodexBackendUnsupportedParameterError,
+    _default,
+    _is_given,
+    _reject_backend_unsupported,
+)
 from ._responses_payloads import (
     ResponsesCreateRequest,
     _usage_from_backend,
@@ -33,6 +41,11 @@ if TYPE_CHECKING:
 class Responses:
     def __init__(self, client: CodexClient) -> None:
         self._client = client
+
+    @cached_property
+    def with_raw_response(self) -> "ResponsesWithRawResponse":
+        """Return the official-compatible raw wrapper for Responses creation."""
+        return ResponsesWithRawResponse(self)
 
     def create(
         self,
@@ -68,53 +81,79 @@ class Responses:
         user: Any = _UNSET,
         timeout: Any = _UNSET,
     ) -> Response | Iterator[ResponseStreamEvent]:
+        params = dict(locals())
+        params.pop("self")
+        return self._create_raw_response(params).parse()
+
+    def _create_raw_response(
+        self,
+        params: dict[str, Any],
+    ) -> LegacyAPIResponse[Response | Iterator[ResponseStreamEvent]]:
+        def value(name: str) -> Any:
+            return params.get(name, _UNSET)
+
         _reject_backend_unsupported(
-            background=background,
-            context_management=context_management,
-            conversation=conversation,
-            max_output_tokens=max_output_tokens,
-            max_tool_calls=max_tool_calls,
-            metadata=metadata,
-            previous_response_id=previous_response_id,
-            prompt=prompt,
-            prompt_cache_retention=prompt_cache_retention,
-            safety_identifier=safety_identifier,
-            stream_options=stream_options,
-            temperature=temperature,
-            top_logprobs=top_logprobs,
-            top_p=top_p,
-            truncation=truncation,
-            user=user,
+            background=value("background"),
+            context_management=value("context_management"),
+            conversation=value("conversation"),
+            max_output_tokens=value("max_output_tokens"),
+            max_tool_calls=value("max_tool_calls"),
+            metadata=value("metadata"),
+            previous_response_id=value("previous_response_id"),
+            prompt=value("prompt"),
+            prompt_cache_retention=value("prompt_cache_retention"),
+            safety_identifier=value("safety_identifier"),
+            stream_options=value("stream_options"),
+            temperature=value("temperature"),
+            top_logprobs=value("top_logprobs"),
+            top_p=value("top_p"),
+            truncation=value("truncation"),
+            user=value("user"),
         )
 
+        store = value("store")
         if _is_given(store) and store is not False:
-            raise NotImplementedError("The Codex backend only accepts store=False.")
+            raise CodexBackendUnsupportedParameterError(
+                "The Codex backend only accepts store=False."
+            )
 
         request = ResponsesCreateRequest.from_openai_params(
             client_defaults=self._client._defaults,
-            input=input,
-            include=include,
-            instructions=instructions,
-            model=model,
-            parallel_tool_calls=parallel_tool_calls,
-            prompt_cache_key=prompt_cache_key,
-            reasoning=reasoning,
-            service_tier=service_tier,
-            text=text,
-            tool_choice=tool_choice,
-            tools=tools,
+            input=value("input"),
+            include=value("include"),
+            instructions=value("instructions"),
+            model=value("model"),
+            parallel_tool_calls=value("parallel_tool_calls"),
+            prompt_cache_key=value("prompt_cache_key"),
+            reasoning=value("reasoning"),
+            service_tier=value("service_tier"),
+            text=value("text"),
+            tool_choice=value("tool_choice"),
+            tools=value("tools"),
         )
         response = self._client._request_response(
             body=request.payload,
             stream=True,
-            timeout=timeout,
+            timeout=value("timeout"),
         )
-        events = stream_response_events(response)
+        stream = value("stream")
         stream_enabled = bool(stream) if _is_given(stream) else False
+        if not stream_enabled:
+            # Eagerly buffer the body like openai-python's non-streaming raw
+            # wrapper. The getattr keeps lightweight test transports usable.
+            _ = getattr(response, "content", None)
 
-        if stream_enabled:
-            return events
-        return collect_response(events, request=request)
+        def parse() -> Response | Iterator[ResponseStreamEvent]:
+            events = stream_response_events(response)
+            if stream_enabled:
+                return events
+            return collect_response(events, http_response=response)
+
+        return LegacyAPIResponse(
+            raw=response,
+            parser=parse,
+            retries_taken=getattr(response, "_codex_retries_taken", 0),
+        )
 
     def parse(
         self,
@@ -232,3 +271,18 @@ class Responses:
         parsed.setdefault("output", [])
         parsed["usage"] = _usage_from_backend(data.get("usage"))
         return CompactedResponse.model_validate(parsed)
+
+
+class ResponsesWithRawResponse:
+    """Official-compatible raw wrapper for the supported create operation."""
+
+    def __init__(self, responses: Responses) -> None:
+        self._responses = responses
+
+        @wraps(responses.create)
+        def create(*args: Any, **kwargs: Any) -> LegacyAPIResponse[Any]:
+            if args:
+                raise TypeError("responses.create() accepts keyword arguments only")
+            return responses._create_raw_response(kwargs)
+
+        self.create = create

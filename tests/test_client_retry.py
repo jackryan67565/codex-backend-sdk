@@ -71,7 +71,7 @@ def test_retry_honors_retry_after_header(monkeypatch):
     assert sleeps == [1.5]
 
 
-def test_retry_caps_retry_after_header(monkeypatch):
+def test_retry_ignores_unreasonably_long_retry_after_header(monkeypatch):
     sleeps = []
     monkeypatch.setattr(transport_module.time, "sleep", sleeps.append)
     client = RetryClient([
@@ -82,12 +82,13 @@ def test_retry_caps_retry_after_header(monkeypatch):
     client._request_models(client_version="test")
 
     assert len(client._session.calls) == 2
-    assert sleeps == [60]
+    assert sleeps == [0]
 
 
 def test_retry_caps_exponential_backoff(monkeypatch):
     sleeps = []
     monkeypatch.setattr(transport_module.time, "sleep", sleeps.append)
+    monkeypatch.setattr(transport_module.random, "random", lambda: 0)
 
     transport_module.sleep_before_retry(
         None,
@@ -95,7 +96,21 @@ def test_retry_caps_exponential_backoff(monkeypatch):
         retry_base_delay=60,
     )
 
-    assert sleeps == [60]
+    assert sleeps == [8]
+
+
+def test_retry_honors_retry_after_milliseconds_header(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(transport_module.time, "sleep", sleeps.append)
+    client = RetryClient([
+        _response(429, headers={"Retry-After-Ms": "250"}),
+        _response(200),
+    ])
+
+    client._request_models(client_version="test")
+
+    assert len(client._session.calls) == 2
+    assert sleeps == [0.25]
 
 
 def test_retry_does_not_retry_client_errors(monkeypatch):
@@ -131,7 +146,7 @@ def test_retry_retries_transport_timeout(monkeypatch):
     assert sleeps == [0]
 
 
-def test_retry_never_replays_non_idempotent_response_post(monkeypatch):
+def test_retry_replays_response_post_when_configured(monkeypatch):
     sleeps = []
     monkeypatch.setattr(transport_module.time, "sleep", sleeps.append)
     client = RetryClient([
@@ -139,18 +154,14 @@ def test_retry_never_replays_non_idempotent_response_post(monkeypatch):
         _response(200),
     ])
 
-    try:
-        client._request_response(body={"input": []})
-    except requests.HTTPError:
-        pass
-    else:
-        raise AssertionError("Expected HTTPError")
+    response = client._request_response(body={"input": []})
 
-    assert len(client._session.calls) == 1
-    assert sleeps == []
+    assert response.status_code == 200
+    assert len(client._session.calls) == 2
+    assert sleeps == [0]
 
 
-def test_retry_never_replays_response_post_after_timeout(monkeypatch):
+def test_retry_replays_response_post_after_timeout_when_configured(monkeypatch):
     sleeps = []
     monkeypatch.setattr(transport_module.time, "sleep", sleeps.append)
     client = RetryClient([
@@ -158,12 +169,8 @@ def test_retry_never_replays_response_post_after_timeout(monkeypatch):
         _response(200),
     ])
 
-    try:
-        client._request_response(body={"input": []})
-    except requests.Timeout:
-        pass
-    else:
-        raise AssertionError("Expected Timeout")
+    response = client._request_response(body={"input": []})
 
-    assert len(client._session.calls) == 1
-    assert sleeps == []
+    assert response.status_code == 200
+    assert len(client._session.calls) == 2
+    assert sleeps == [0]

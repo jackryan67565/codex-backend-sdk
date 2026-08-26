@@ -15,7 +15,7 @@ ORIGINATOR = "codex_cli_rs"
 RESPONSES_ORIGINATOR = "codex_backend_sdk"
 _MAX_TIMEOUT_SECONDS = 600.0
 _MAX_MODEL_RETRIES = 5
-_MAX_RETRY_DELAY_SECONDS = 60.0
+_MAX_RETRY_DELAY_SECONDS = 8.0
 
 
 class CodexClient:
@@ -45,7 +45,7 @@ class CodexClient:
         instructions: Optional[str] = None,
         timeout: float = 120,
         max_retries: int = 2,
-        retry_base_delay: float = 0.25,
+        retry_base_delay: float = 0.5,
     ) -> None:
         from .resources.models import Models
         from .resources.responses import Responses
@@ -150,6 +150,8 @@ class CodexClient:
             timeout=self._resolve_timeout(timeout),
             max_retries=self._max_retries,
             retry_base_delay=self._retry_base_delay,
+            retry_non_idempotent=True,
+            translate_errors=True,
         )
 
     def _request_compaction(

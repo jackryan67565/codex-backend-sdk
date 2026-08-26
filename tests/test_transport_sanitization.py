@@ -2,7 +2,13 @@ import pytest
 import requests
 from requests.adapters import BaseAdapter
 
-from codex_backend_sdk import OpenAI, OpenAINetworkPolicyError
+from codex_backend_sdk import (
+    APIConnectionError,
+    APITimeoutError,
+    AuthenticationError,
+    OpenAI,
+    OpenAINetworkPolicyError,
+)
 from codex_backend_sdk._storage import _CredentialStore
 
 
@@ -64,7 +70,7 @@ def _call_compaction(client):
 
 @pytest.mark.parametrize("call", [_call_models, _call_responses, _call_compaction])
 @pytest.mark.parametrize(
-    ("outcome", "error_type"),
+    ("outcome", "transport_error_type"),
     [
         ("status", requests.HTTPError),
         ("redirect", OpenAINetworkPolicyError),
@@ -72,8 +78,23 @@ def _call_compaction(client):
         ("connection", requests.ConnectionError),
     ],
 )
-def test_transport_failures_do_not_retain_credentials(call, outcome, error_type):
+def test_transport_failures_do_not_retain_credentials(
+    call,
+    outcome,
+    transport_error_type,
+):
     client, adapter = _client_with_failure(outcome)
+    responses_error_types = {
+        "status": AuthenticationError,
+        "redirect": OpenAINetworkPolicyError,
+        "timeout": APITimeoutError,
+        "connection": APIConnectionError,
+    }
+    error_type = (
+        responses_error_types[outcome]
+        if call is _call_responses
+        else transport_error_type
+    )
 
     with pytest.raises(error_type) as caught:
         call(client)

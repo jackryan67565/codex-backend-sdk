@@ -214,7 +214,8 @@ def test_responses_create_collects_to_pydantic_response():
 
     assert isinstance(response, Response)
     assert response.id == "resp_123"
-    assert response.output_text == "hello"
+    assert response.output_text == ""
+    assert response.output is None
     assert "output_text" not in response.model_dump()
     assert response.usage.total_tokens == 3
     assert client.last_response.closed is True
@@ -650,9 +651,12 @@ def test_responses_rejects_hosted_and_network_capable_tools():
     assert client.posts == []
 
 
-def test_responses_rejects_non_function_tool_choice():
+@pytest.mark.parametrize(
+    "tools",
+    [[], [{"type": "function", "name": "lookup", "parameters": {"type": "object"}}]],
+)
+def test_responses_rejects_non_function_tool_choice(tools):
     client = FakeClient()
-    tools = [{"type": "function", "name": "lookup", "parameters": {"type": "object"}}]
 
     try:
         client.responses.create(
