@@ -1,0 +1,3 @@
+interface:
+  display_name: "Codex Backend SDK"
+  short_description: "Use the OpenAI-shaped Codex backend stand-in"
