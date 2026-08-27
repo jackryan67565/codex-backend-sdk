@@ -41,11 +41,12 @@ The default suite is offline, skips every `live` test, and must not read stored 
 env -u TEMP -u TMP .venv/bin/python -m pytest -q
 ```
 
-The tests in `test_basic.py`, `test_conversation.py`, `test_reasoning.py`, `test_repair_iteration.py`, `test_structured_output.py`, and `test_tools.py` authenticate and contact live services through the shared fixture or a test-owned client. They remain skipped without `--live`. Run them only when the user explicitly requests live integration verification and authorizes credential use, network access, and possible quota consumption.
+The live test cases in `test_basic.py`, `test_compaction.py`, `test_conversation.py`, `test_reasoning.py`, `test_repair_iteration.py`, `test_structured_output.py`, and `test_tools.py` authenticate and contact live services through the shared fixture or a test-owned client. They remain skipped without `--live`. Run them only when the user explicitly requests live integration verification and authorizes credential use, network access, and possible quota consumption.
 
 ```bash
 env -u TEMP -u TMP .venv/bin/python -m pytest --live -q \
   tests/test_basic.py \
+  tests/test_compaction.py \
   tests/test_conversation.py \
   tests/test_reasoning.py \
   tests/test_repair_iteration.py \

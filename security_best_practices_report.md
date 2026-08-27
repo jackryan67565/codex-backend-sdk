@@ -62,7 +62,9 @@ the SDK.
 
 ### AS-004 — Implicit authentication and quota use during tests — Remediated
 
-All credentialed integration modules carry the `live` marker. Pytest skips them
+All credentialed integration test cases carry the `live` marker. Wholly live
+modules use a module-level marker; the mixed compaction module marks only its
+credentialed test, leaving its sanitizer test offline. Pytest skips live cases
 unless the operator supplies `--live`; the shared authenticated fixture remains
 lazy ([`tests/conftest.py:7`](tests/conftest.py#L7)). A normal test run is therefore
 offline and does not load the user's credential cache.
