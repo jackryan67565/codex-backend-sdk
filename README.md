@@ -104,27 +104,23 @@ cd codex-backend-sdk
 pip install -e .
 ```
 
-### Install the 0.6.0 wheel in another project
+### Install the 0.6.2 wheel in another project
 
 Release artifacts are built locally into the Git-ignored `dist/` directory.
-Install the `0.6.0` wheel directly into a target project's virtual environment:
+Install the `0.6.2` wheel directly into a target project's virtual environment:
 
 ```bash
 uv pip install \
   --python /absolute/path/to/project/.venv/bin/python \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.6.0-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.6.2-py3-none-any.whl
 ```
 
 Or, when that virtual environment includes pip:
 
 ```bash
 /absolute/path/to/project/.venv/bin/python -m pip install \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.6.0-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.6.2-py3-none-any.whl
 ```
-
-That tagged wheel predates the 0.6.1 terminal-output repair. Until a 0.6.1
-artifact is explicitly built and checkpointed, use the editable installation
-below for the repaired checkout; do not rebuild different contents as 0.6.0.
 
 Because `dist/` is not tracked, a fresh clone may not contain the artifact.
 Build from the tagged checkout before local distribution, and never substitute
@@ -209,6 +205,8 @@ or empty, CBS preserves exact completed items from preceding
 `response.output_item.done` events in the same stream. It does not reconstruct
 output from text deltas or local request state, and it does not fill missing
 model names, IDs, timestamps, statuses, usage, or request echoes.
+The terminal event must be final; any later event makes non-streaming collection
+fail with `APIResponseValidationError`.
 
 ### Raw Responses access
 

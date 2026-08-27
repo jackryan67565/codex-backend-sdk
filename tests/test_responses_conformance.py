@@ -616,6 +616,32 @@ def test_non_streaming_response_does_not_duplicate_complete_terminal_output():
     assert response.output_text == "complete"
 
 
+def test_non_streaming_response_rejects_output_item_after_terminal_event():
+    post_terminal_message = {
+        "id": "msg_post_terminal",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [{"type": "output_text", "text": "late", "annotations": []}],
+    }
+    client, _ = _cbs_client([_http_response(body=_sse(
+        {
+            "type": "response.completed",
+            "sequence_number": 1,
+            "response": {**_TERMINAL_RESPONSE, "output": []},
+        },
+        {
+            "type": "response.output_item.done",
+            "sequence_number": 2,
+            "output_index": 0,
+            "item": post_terminal_message,
+        },
+    ))])
+
+    with pytest.raises(APIResponseValidationError, match="event after its terminal event"):
+        client.responses.create(input="synthetic")
+
+
 def test_failed_terminal_event_returns_backend_response_instead_of_runtime_error():
     failed = {
         **_TERMINAL_RESPONSE,

@@ -112,7 +112,8 @@ is authoritative. If a completed terminal Response omits output or carries
 `response.output_item.done` events in the same stream. It does not reconstruct
 output from deltas or fill model, ID, timestamps, status, usage, request echoes,
 or output from local request state. A stream ending without a terminal event is
-an `APIConnectionError`; invalid SSE is an `APIResponseValidationError`.
+an `APIConnectionError`; a later event after terminality or invalid SSE is an
+`APIResponseValidationError`.
 Streaming callers still receive backend event payloads unchanged and in order,
 including unknown backend fields.
 

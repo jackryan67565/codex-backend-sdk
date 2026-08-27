@@ -124,6 +124,20 @@ def collect_response(
     completed_output_items: list[dict[str, Any]] = []
 
     for event in events:
+        if terminal is not None:
+            if event.type in {
+                "response.completed",
+                "response.failed",
+                "response.incomplete",
+            }:
+                message = "Response stream contained more than one terminal event."
+            else:
+                message = "Response stream contained an event after its terminal event."
+            raise APIResponseValidationError(
+                http_response,
+                body=None,
+                message=message,
+            )
         if event.type == "response.output_item.done":
             item = _event_output_item_dict(event)
             if item is not None:
@@ -133,12 +147,6 @@ def collect_response(
             "response.failed",
             "response.incomplete",
         }:
-            if terminal is not None:
-                raise APIResponseValidationError(
-                    http_response,
-                    body=None,
-                    message="Response stream contained more than one terminal event.",
-                )
             terminal = _event_response_dict(event)
             if terminal is None:
                 raise APIResponseValidationError(

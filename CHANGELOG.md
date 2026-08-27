@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.2] - 2026-08-27
+
+### Fixed
+- Require the terminal SSE event to be final during public non-streaming
+  collection. Any later event now raises `APIResponseValidationError`, so the
+  completed-item fallback cannot admit output emitted after terminality.
+
+### Tests
+- Add an offline terminal-first regression proving that a later
+  `response.output_item.done` item is rejected rather than projected as output.
+
 ## [0.6.1] - 2026-08-27
 
 ### Fixed

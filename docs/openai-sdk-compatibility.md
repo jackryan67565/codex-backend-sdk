@@ -61,7 +61,8 @@ needed to produce the official-shaped non-streaming Response from the backend's
 forced SSE transport; it does not reconstruct from deltas or local request
 state. Other missing terminal fields remain unset/`None`, including model,
 response ID, timestamps, status, usage, and request echoes. A missing terminal
-event is an `APIConnectionError`; malformed SSE is an
+event is an `APIConnectionError`; a nonterminal event after the terminal event
+or malformed SSE is an
 `APIResponseValidationError`.
 
 HTTP failures use the pinned official public taxonomy (`BadRequestError`,
