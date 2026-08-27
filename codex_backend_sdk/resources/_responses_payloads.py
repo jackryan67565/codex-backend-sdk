@@ -120,9 +120,15 @@ def collect_response(
     http_response: requests.Response,
 ) -> Response:
     terminal: Optional[dict[str, Any]] = None
+    terminal_event_type: Optional[str] = None
+    completed_output_items: list[dict[str, Any]] = []
 
     for event in events:
-        if event.type in {
+        if event.type == "response.output_item.done":
+            item = _event_output_item_dict(event)
+            if item is not None:
+                completed_output_items.append(item)
+        elif event.type in {
             "response.completed",
             "response.failed",
             "response.incomplete",
@@ -140,6 +146,7 @@ def collect_response(
                     body=None,
                     message="Terminal response event did not contain a Response object.",
                 )
+            terminal_event_type = event.type
         elif event.type == "error":
             body = getattr(event, "error", None)
             if not isinstance(body, dict):
@@ -159,6 +166,12 @@ def collect_response(
             message="Response stream ended without a terminal response event.",
             request=_prepared_request(http_response),
         )
+    if (
+        terminal_event_type == "response.completed"
+        and completed_output_items
+        and terminal.get("output") in (None, [])
+    ):
+        terminal = {**terminal, "output": completed_output_items}
     return Response.model_validate(terminal)
 
 
@@ -298,6 +311,13 @@ def _event_response_dict(event: ResponseStreamEvent) -> Optional[dict[str, Any]]
     if isinstance(response, BaseModel):
         return response.model_dump()
     return response if isinstance(response, dict) else None
+
+
+def _event_output_item_dict(event: ResponseStreamEvent) -> Optional[dict[str, Any]]:
+    item = getattr(event, "item", None)
+    if isinstance(item, BaseModel):
+        return item.model_dump(exclude_unset=True)
+    return item if isinstance(item, dict) else None
 
 
 def _message(role: str, content: list[dict[str, Any]]) -> dict[str, Any]:

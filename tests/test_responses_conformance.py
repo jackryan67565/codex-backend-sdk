@@ -357,10 +357,13 @@ def test_raw_response_create_keeps_the_create_signature():
 
 
 def test_sparse_terminal_response_does_not_echo_or_invent_request_facts():
-    client, _ = _cbs_client([_http_response(body=_sse({
-        "type": "response.completed",
-        "response": {"id": "resp_sparse"},
-    }))])
+    client, _ = _cbs_client([_http_response(body=_sse(
+        {"type": "response.output_text.delta", "delta": "not a completed item"},
+        {
+            "type": "response.completed",
+            "response": {"id": "resp_sparse"},
+        },
+    ))])
 
     response = client.responses.create(
         model="model-requested",
@@ -535,6 +538,82 @@ def test_streaming_events_preserve_backend_payloads_in_order():
     events = list(client.responses.create(input="Hi", stream=True))
 
     assert [event.model_dump(exclude_unset=True) for event in events] == payloads
+
+
+def test_non_streaming_response_recovers_completed_output_item_when_terminal_output_is_empty():
+    output_text = "x" * 260
+    completed_message = {
+        "id": "msg_backend",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [{
+            "type": "output_text",
+            "text": output_text,
+            "annotations": [],
+        }],
+    }
+    body = _sse(
+        {
+            "type": "response.output_item.done",
+            "sequence_number": 103,
+            "output_index": 0,
+            "item": completed_message,
+        },
+        {
+            "type": "response.completed",
+            "sequence_number": 104,
+            "response": {
+                **_TERMINAL_RESPONSE,
+                "output": [],
+                "usage": {
+                    "input_tokens": 693,
+                    "output_tokens": 151,
+                    "total_tokens": 844,
+                    "output_tokens_details": {"reasoning_tokens": 42},
+                },
+            },
+        },
+    )
+    client, _ = _cbs_client([_http_response(body=body)])
+
+    raw = client.responses.with_raw_response.create(input="synthetic")
+    assert raw.content == body
+    assert b'"output":[]' in raw.content
+    response = raw.parse()
+
+    assert response.output == [completed_message]
+    assert response.output_text == output_text
+    assert response.usage is not None
+    assert response.usage.output_tokens == 151
+
+
+def test_non_streaming_response_does_not_duplicate_complete_terminal_output():
+    completed_message = {
+        "id": "msg_backend",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [{"type": "output_text", "text": "complete", "annotations": []}],
+    }
+    client, _ = _cbs_client([_http_response(body=_sse(
+        {
+            "type": "response.output_item.done",
+            "sequence_number": 1,
+            "output_index": 0,
+            "item": completed_message,
+        },
+        {
+            "type": "response.completed",
+            "sequence_number": 2,
+            "response": {**_TERMINAL_RESPONSE, "output": [completed_message]},
+        },
+    ))])
+
+    response = client.responses.create(input="synthetic")
+
+    assert response.output == [completed_message]
+    assert response.output_text == "complete"
 
 
 def test_failed_terminal_event_returns_backend_response_instead_of_runtime_error():

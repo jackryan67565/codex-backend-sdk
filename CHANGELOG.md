@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2026-08-27
+
+### Fixed
+- Preserve exact items from preceding `response.output_item.done` events when
+  a completed terminal SSE Response omits output or reports `output=[]`.
+- Keep a nonempty terminal output authoritative so the fallback cannot duplicate
+  output already present in `response.completed`.
+
+### Changed
+- Narrow the terminal-only 0.6.0 contract: the non-streaming adapter may recover
+  backend-completed output items from the same stream, but still never invents
+  output from deltas, request state, or locally supplied values.
+
+### Tests
+- Add an offline regression matching the reported event geometry: a completed
+  output item at sequence 103 followed by a terminal empty output at sequence
+  104, plus coverage that a complete terminal output is not duplicated.
+
 ## [0.6.0] - 2026-08-26
 
 ### Added

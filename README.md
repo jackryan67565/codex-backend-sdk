@@ -33,7 +33,7 @@ to override it. This local default does not guarantee availability for every
 ChatGPT account or rollout.
 
 The compatibility target is the supported subset, not the full official SDK.
-Release 0.6.0 pins `openai==2.46.0` as its differential-test baseline; the
+CBS pins `openai==2.46.0` as its differential-test baseline; the
 official package is a development dependency, not a runtime dependency.
 Authentication uses a read-only Codex login instead of an API key, and the
 agent-safe boundary intentionally rejects unsupported resources, hosted tools,
@@ -122,6 +122,10 @@ Or, when that virtual environment includes pip:
   /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.6.0-py3-none-any.whl
 ```
 
+That tagged wheel predates the 0.6.1 terminal-output repair. Until a 0.6.1
+artifact is explicitly built and checkpointed, use the editable installation
+below for the repaired checkout; do not rebuild different contents as 0.6.0.
+
 Because `dist/` is not tracked, a fresh clone may not contain the artifact.
 Build from the tagged checkout before local distribution, and never substitute
 different contents under the same version. For work after the checkpoint, use
@@ -198,10 +202,13 @@ print(response.output_text)
 The adapter does not inject a reasoning effort when one is omitted; effective
 behavior remains backend-authoritative.
 
-The non-streaming result is parsed only from the backend's terminal
-`response.completed`, `response.failed`, or `response.incomplete` event. CBS
-does not fill missing model names, IDs, timestamps, statuses, usage, request
-echoes, or output items from local request state or intermediate deltas.
+The non-streaming result requires one backend terminal `response.completed`,
+`response.failed`, or `response.incomplete` event. For a completed response, a
+nonempty terminal `response.output` is authoritative. If that field is absent
+or empty, CBS preserves exact completed items from preceding
+`response.output_item.done` events in the same stream. It does not reconstruct
+output from text deltas or local request state, and it does not fill missing
+model names, IDs, timestamps, statuses, usage, or request echoes.
 
 ### Raw Responses access
 

@@ -106,12 +106,15 @@ The backend streams SSE. A non-streaming SDK call collects those events into a
 typed `Response`; `stream=True` returns the event iterator.
 
 The collector accepts exactly one terminal `response.completed`,
-`response.failed`, or `response.incomplete` event and validates its embedded
-Response directly. It does not reconstruct output from deltas or fill model,
-ID, timestamps, status, usage, request echoes, or output from local request
-state. A stream ending without a terminal event is an `APIConnectionError`;
-invalid SSE is an `APIResponseValidationError`. Streaming callers receive the
-backend event payloads in order, including unknown backend fields.
+`response.failed`, or `response.incomplete` event. A nonempty terminal output
+is authoritative. If a completed terminal Response omits output or carries
+`output=[]`, the collector preserves exact items emitted by preceding
+`response.output_item.done` events in the same stream. It does not reconstruct
+output from deltas or fill model, ID, timestamps, status, usage, request echoes,
+or output from local request state. A stream ending without a terminal event is
+an `APIConnectionError`; invalid SSE is an `APIResponseValidationError`.
+Streaming callers still receive backend event payloads unchanged and in order,
+including unknown backend fields.
 
 With the default client settings, the prepared payload includes:
 

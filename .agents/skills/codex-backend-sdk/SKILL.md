@@ -65,8 +65,11 @@ receipt abstractions when the official-shaped call is sufficient.
   use, MCP, and other backend-executed tools are outside this SDK.
 - The model catalog is enumeration, not a Responses support oracle. Submit an
   explicitly requested model and let the Responses backend accept or reject it.
-- Parsed fields come from the backend terminal event. Missing IDs, model names,
-  timestamps, status, output, or usage remain unknown; do not reconstruct them.
+- Parsed fields come from the backend stream. A nonempty terminal output wins;
+  if a completed terminal event omits output or carries an empty list, CBS uses
+  exact preceding `response.output_item.done` items. Missing IDs, model names,
+  timestamps, status, usage, and other fields remain unknown; do not reconstruct
+  output from deltas or local request state.
 
 ## Handle transport deliberately
 

@@ -52,13 +52,17 @@ survive preparation without value substitution. The backend requires
 normalizes shorthand string/message input to the backend's explicit item shape.
 Those two adaptations are visible in `raw.http_request.body`.
 
-For a non-streaming call, CBS validates only the full Response carried by one
-terminal `response.completed`, `response.failed`, or `response.incomplete`
-event. It does not reconstruct or fill model names, response IDs, timestamps,
-status, usage, request echoes, or output from local state or delta events.
-Missing terminal fields therefore remain unset/`None` just as sparse official
-models do. A missing terminal event is an `APIConnectionError`; malformed SSE
-is an `APIResponseValidationError`.
+For a non-streaming call, CBS requires one terminal `response.completed`,
+`response.failed`, or `response.incomplete` event. A nonempty terminal output
+is authoritative. When a completed terminal Response omits output or carries
+`output=[]`, CBS uses exact output items from preceding
+`response.output_item.done` events in the same stream. This is the adapter step
+needed to produce the official-shaped non-streaming Response from the backend's
+forced SSE transport; it does not reconstruct from deltas or local request
+state. Other missing terminal fields remain unset/`None`, including model,
+response ID, timestamps, status, usage, and request echoes. A missing terminal
+event is an `APIConnectionError`; malformed SSE is an
+`APIResponseValidationError`.
 
 HTTP failures use the pinned official public taxonomy (`BadRequestError`,
 `AuthenticationError`, `PermissionDeniedError`, `NotFoundError`,
