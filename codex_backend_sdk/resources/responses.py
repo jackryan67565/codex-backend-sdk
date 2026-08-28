@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from functools import cached_property, wraps
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from .._api_response import LegacyAPIResponse
 from .._models import (
@@ -37,6 +37,8 @@ from ._responses_payloads import (
 if TYPE_CHECKING:
     from .._client import CodexClient
 
+ResponseInput = Union[str, list[Any]]
+
 
 class Responses:
     def __init__(self, client: CodexClient) -> None:
@@ -54,7 +56,7 @@ class Responses:
         context_management: Any = _UNSET,
         conversation: Any = _UNSET,
         include: Any = _UNSET,
-        input: Any = _UNSET,
+        input: ResponseInput = _UNSET,
         instructions: Any = _UNSET,
         max_output_tokens: Any = _UNSET,
         max_tool_calls: Any = _UNSET,
@@ -163,7 +165,7 @@ class Responses:
         context_management: Any = _UNSET,
         conversation: Any = _UNSET,
         include: Any = _UNSET,
-        input: Any = _UNSET,
+        input: ResponseInput = _UNSET,
         instructions: Any = _UNSET,
         max_output_tokens: Any = _UNSET,
         max_tool_calls: Any = _UNSET,
@@ -246,7 +248,10 @@ class Responses:
         payload = {
             "model": _default(model, self._client._defaults["model"]),
             "instructions": _default(instructions, self._client._defaults["instructions"]) or "",
-            "input": [normalize_input_item(item) for item in input],
+            "input": [
+                normalize_input_item(item, index=index)
+                for index, item in enumerate(input)
+            ],
             "tools": normalized_tools,
             "parallel_tool_calls": (
                 bool(_default(parallel_tool_calls, False)) if normalized_tools else False

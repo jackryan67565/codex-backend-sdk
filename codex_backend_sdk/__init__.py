@@ -6,7 +6,7 @@ account data, uploads, Realtime connection material, or state-changing ChatGPT
 resources. The standard Responses raw wrapper is sanitized before exposure.
 """
 
-__version__ = "0.6.2"
+__version__ = "0.6.3"
 
 from ._network import OpenAINetworkPolicyError
 from .codex_client import (

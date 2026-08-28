@@ -1,5 +1,5 @@
 import inspect
-from typing import get_args
+from typing import Any, Union, get_args, get_type_hints
 
 import pytest
 
@@ -55,6 +55,13 @@ def test_responses_create_keeps_supported_official_keyword_names():
     }
 
     assert expected <= set(parameters)
+
+
+def test_responses_input_annotation_matches_the_validated_top_level_shapes():
+    expected = Union[str, list[Any]]
+
+    assert get_type_hints(Responses.create)["input"] == expected
+    assert get_type_hints(Responses.parse)["input"] == expected
 
 
 def test_service_tier_type_matches_the_verified_backend_subset():

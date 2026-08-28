@@ -143,6 +143,12 @@ schema objects, and reasoning efforts including `medium` and `low` retain their
 values. `max_output_tokens` remains an explicit pre-transport error because no
 verified Codex-backend equivalent exists.
 
+Top-level Responses `input` must be a string or list. Strings become one user
+message; list entries may be role-and-content message shorthand or typed
+`message`, `reasoning`, `function_call`, `function_call_output`, or `compaction`
+items. Bare mappings, missing message content, unknown discriminators, and
+non-mapping list entries raise `TypeError` before transport.
+
 ### Raw response and errors
 
 `responses.with_raw_response.create(...)` returns the pinned

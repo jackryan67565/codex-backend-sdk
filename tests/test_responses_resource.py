@@ -10,6 +10,7 @@ from codex_backend_sdk import (
     Reasoning,
     Response,
 )
+from codex_backend_sdk.resources._responses_payloads import normalize_input
 
 
 class FakeSSE:
@@ -76,7 +77,7 @@ class FakeClient(OpenAI):
         self.post_options.append(timeout)
         self.last_response = FakeJSONResponse({
             "id": "resp_123",
-            "output": [{"type": "message", "content": []}],
+            "output": [{"type": "message", "role": "assistant", "content": []}],
             "usage": {"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
             "backend_shape_marker": {"present": True},
         })
@@ -144,6 +145,68 @@ class ParseFakeClient(FakeClient):
             ),
         ])
         return self.last_response
+
+
+def test_normalize_input_rejects_bare_mapping():
+    with pytest.raises(
+        TypeError,
+        match="input must be a string or a list of valid Responses input items",
+    ):
+        normalize_input({"task": "example"})
+
+
+def test_responses_raw_create_rejects_bare_mapping_before_transport():
+    client = FakeClient()
+
+    with pytest.raises(
+        TypeError,
+        match="input must be a string or a list of valid Responses input items",
+    ):
+        client.responses.with_raw_response.create(input={"task": "example"})
+
+    assert client.posts == []
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        {"task": "example"},
+        {"type": "unknown"},
+        {"type": []},
+        {"role": "user"},
+        42,
+    ],
+)
+def test_responses_create_rejects_invalid_list_items_before_transport(item):
+    client = FakeClient()
+
+    with pytest.raises(TypeError, match=r"input\[0\]"):
+        client.responses.create(input=[item])
+
+    assert client.posts == []
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        {"type": "reasoning", "id": "rs_1", "summary": []},
+        {
+            "type": "function_call",
+            "call_id": "call_1",
+            "name": "lookup",
+            "arguments": "{}",
+        },
+        {
+            "type": "function_call_output",
+            "call_id": "call_1",
+            "output": "result",
+        },
+        {"type": "compaction", "encrypted_content": "opaque"},
+        {"type": "message", "role": "assistant", "content": []},
+    ],
+)
+def test_normalize_input_preserves_supported_typed_items(item):
+    assert normalize_input([item]) == [item]
 
 
 class TierReportingFakeClient(FakeClient):
@@ -613,7 +676,7 @@ def test_responses_create_continues_from_compacted_output_without_id_linkage():
     assert path == "/responses"
     assert stream is True
     assert payload["input"] == [
-        {"type": "message", "content": []},
+        {"type": "message", "role": "assistant", "content": []},
         {
             "type": "message",
             "role": "user",

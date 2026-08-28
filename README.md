@@ -122,6 +122,10 @@ Or, when that virtual environment includes pip:
   /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.6.2-py3-none-any.whl
 ```
 
+That tagged wheel predates the 0.6.3 input-validation repair. Until a 0.6.3
+artifact is explicitly built and checkpointed, use the editable installation
+below for the repaired checkout; do not rebuild different contents as 0.6.2.
+
 Because `dist/` is not tracked, a fresh clone may not contain the artifact.
 Build from the tagged checkout before local distribution, and never substitute
 different contents under the same version. For work after the checkpoint, use
@@ -194,6 +198,13 @@ response = client.responses.create(
 )
 print(response.output_text)
 ```
+
+Top-level `input` accepts a string or a list of valid Responses input items.
+Bare mappings and untyped, unknown, non-mapping, or malformed message entries
+raise locally before transport. Message shorthand with a role and content
+remains supported, as do typed message, reasoning, function-call,
+function-result, and compaction items used by the documented stateless replay
+flows.
 
 The adapter does not inject a reasoning effort when one is omitted; effective
 behavior remains backend-authoritative.

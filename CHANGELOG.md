@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.3] - 2026-08-27
+
+### Fixed
+- Reject bare mapping `input` values before transport instead of promoting them
+  to invalid one-item lists.
+- Reject untyped, unknown, non-mapping, and malformed message entries inside
+  input lists with a clear indexed `TypeError`.
+
+### Changed
+- Type public Responses `input` parameters as a string or item list, matching
+  the pinned official client's annotated top-level shape while retaining CBS's
+  narrower supported item set.
+
+### Tests
+- Add offline regressions proving invalid input causes zero transport requests
+  and valid string, message, reasoning, function, and compaction items remain
+  supported.
+
 ## [0.6.2] - 2026-08-27
 
 ### Fixed

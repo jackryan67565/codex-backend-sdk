@@ -61,6 +61,10 @@ receipt abstractions when the official-shaped call is sufficient.
   prior `response.output` items.
 - `max_output_tokens` remains an explicit local error until the backend has a
   verified equivalent.
+- Top-level Responses `input` must be a string or a list of valid items. Do not
+  pass a bare mapping; list entries need message role/content or a CBS-supported
+  `message`, `reasoning`, `function_call`, `function_call_output`, or
+  `compaction` type.
 - Only caller-executed function tools are allowed. Hosted web search, computer
   use, MCP, and other backend-executed tools are outside this SDK.
 - The model catalog is enumeration, not a Responses support oracle. Submit an

@@ -28,6 +28,15 @@ from .._utils import (
 
 _SUPPORTED_CREATE_SERVICE_TIERS = frozenset({"default", "priority"})
 _SUPPORTED_CREATE_REASONING_CONTEXTS = frozenset({"current_turn", "all_turns"})
+_SUPPORTED_INPUT_ITEM_TYPES = frozenset({
+    "compaction",
+    "function_call",
+    "function_call_output",
+    "message",
+    "reasoning",
+})
+_SUPPORTED_MESSAGE_ROLES = frozenset({"assistant", "developer", "system", "user"})
+_INPUT_TYPE_ERROR = "input must be a string or a list of valid Responses input items"
 
 
 class ResponsesCreateRequest(CodexBaseModel):
@@ -210,24 +219,44 @@ def _normalize_create_reasoning(reasoning: Any) -> dict[str, Any]:
 
 
 def normalize_input(input_value: Any) -> list[dict[str, Any]]:
-    if not _is_given(input_value) or input_value is None:
+    if not _is_given(input_value):
         return []
     if isinstance(input_value, str):
         return [_message("user", [{"type": "input_text", "text": input_value}])]
     if isinstance(input_value, list):
-        return [normalize_input_item(item) for item in input_value]
-    return [normalize_input_item(input_value)]
+        return [
+            normalize_input_item(item, index=index)
+            for index, item in enumerate(input_value)
+        ]
+    raise TypeError(_INPUT_TYPE_ERROR)
 
 
-def normalize_input_item(item: Any) -> dict[str, Any]:
-    raw = _as_dict(item)
-    if raw.get("type") and raw.get("type") != "message":
+def normalize_input_item(item: Any, *, index: Optional[int] = None) -> dict[str, Any]:
+    locator = "input item" if index is None else f"input[{index}]"
+    try:
+        raw = _as_dict(item)
+    except (TypeError, ValueError):
+        raise TypeError(f"{locator} must be a valid Responses input item") from None
+
+    item_type = raw.get("type")
+    if item_type is not None and (
+        not isinstance(item_type, str)
+        or item_type not in _SUPPORTED_INPUT_ITEM_TYPES
+    ):
+        raise TypeError(f"{locator}.type is not supported by this SDK")
+    if item_type is None and "role" not in raw:
+        raise TypeError(
+            f"{locator} must include a recognized type or a message role"
+        )
+    if item_type not in {None, "message"}:
         return raw
-    if "role" not in raw:
-        return raw
 
-    role = raw["role"]
-    content = raw.get("content", [])
+    role = raw.get("role")
+    if role not in _SUPPORTED_MESSAGE_ROLES:
+        raise TypeError(f"{locator}.role is not a valid Responses message role")
+    if "content" not in raw:
+        raise TypeError(f"{locator} message must include content")
+    content = raw["content"]
     if isinstance(content, str):
         content_type = "output_text" if role == "assistant" else "input_text"
         content = [{"type": content_type, "text": content}]
@@ -236,6 +265,8 @@ def normalize_input_item(item: Any) -> dict[str, Any]:
             {"type": "input_text", "text": part} if isinstance(part, str) else part
             for part in content
         ]
+    else:
+        raise TypeError(f"{locator}.content must be a string or list")
     normalized = _message(role, content)
     for field in ("id", "status", "phase"):
         if field in raw:

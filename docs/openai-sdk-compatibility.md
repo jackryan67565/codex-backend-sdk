@@ -52,6 +52,15 @@ survive preparation without value substitution. The backend requires
 normalizes shorthand string/message input to the backend's explicit item shape.
 Those two adaptations are visible in `raw.http_request.body`.
 
+The public `input` annotation and runtime both accept only a string or a list of
+valid Responses input items. CBS rejects a bare mapping before transport rather
+than silently promoting it into a one-item list. List entries must be message
+shorthand with both `role` and `content`, or carry one of the supported typed
+item discriminators: `message`, `reasoning`, `function_call`,
+`function_call_output`, or `compaction`. This is stricter than the pinned
+official client's runtime permissiveness, while matching its annotated
+top-level shape and the narrower CBS backend/safety subset.
+
 For a non-streaming call, CBS requires one terminal `response.completed`,
 `response.failed`, or `response.incomplete` event. A nonempty terminal output
 is authoritative. When a completed terminal Response omits output or carries
