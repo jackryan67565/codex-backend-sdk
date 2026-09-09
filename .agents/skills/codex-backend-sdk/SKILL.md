@@ -30,6 +30,53 @@ can parse a backend-reported `max` effort. This is an offline-verified adapter
 capability, not proof that the user's ChatGPT account or current backend rollout
 will serve Astra. Do not infer availability from catalog inclusion or omission.
 
+## Resolve the installed CBS before use
+
+Loading this skill does not select or update a Python package. A target project
+uses whichever `codex_backend_sdk` its actual interpreter resolves first.
+Before relying on a recently added capability:
+
+1. Identify the interpreter from the target project's own environment and
+   instructions. Do not assume that `.venv/bin/python` is the right interpreter.
+2. Without authenticating, inspect the installed package version and source:
+
+   ```bash
+   /absolute/path/to/python -c 'import codex_backend_sdk as c; print(c.__version__); print(c.__file__)'
+   ```
+
+   Treat an import failure as “not installed,” not as permission to install it.
+3. Read the desired local version from this CBS checkout's `pyproject.toml`.
+   Do not infer the package version from this skill, a Git tag, or an ignored
+   artifact filename.
+4. Compare both version and import path. An editable installation resolves into
+   the checkout and follows its source; a wheel installation remains frozen at
+   the installed version until it is replaced. An unexpected global or PyPI
+   path is neither one.
+
+If the target environment is missing or stale and its project instructions
+permit a local dependency change, use that project's dependency convention.
+For a checkpointed wheel, first verify the matching
+`dist/SHA256SUMS-<version>.txt`, then reinstall the exact local artifact:
+
+```bash
+uv pip install \
+  --python /absolute/path/to/project/python \
+  --offline --reinstall --no-deps \
+  /home/nick/code/codex-backend-sdk/dist/codex_backend_sdk-<version>-py3-none-any.whl
+```
+
+Use `--no-deps` only after confirming the target already satisfies CBS's
+runtime dependencies. If dependencies are missing, stop rather than contacting
+a package index unless the user or target project's instructions authorize that
+network access. For an editable integration, reinstall the local checkout with
+the target project's normal editable-install command so package metadata stays
+aligned with the source.
+
+After any install or upgrade, rerun the version-and-path probe with the same
+interpreter. Do not authenticate or make a model call merely to verify package
+selection. Report the resolved version, import path, installation mode, and any
+reason an intended upgrade was not performed.
+
 ## Use the official-shaped path
 
 Prefer the standard client surface:
