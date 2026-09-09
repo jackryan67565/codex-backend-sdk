@@ -18,6 +18,13 @@ The adapter's client default is the explicit `gpt-5.6-sol` model ID. Supplying
 override that default. This is the current checkout contract, not a claim of
 universal backend availability. It is included in the `0.6.0` checkpoint.
 
+The supported request path also accepts the explicit `gpt-6-astra` model ID
+without changing the default. CBS preserves `reasoning.effort="max"` in the
+prepared body and accepts a backend-reported `max` value in the typed Response,
+matching the pinned official client's reasoning-effort vocabulary. This is an
+offline-verified compatibility claim, not evidence of ChatGPT Codex backend
+entitlement for a particular account or rollout.
+
 The public compatibility baseline is pinned to exact `openai==2.46.0` in the
 development extra and was differentially checked on 2026-08-26 with local mock
 transports against the official [Responses create
@@ -46,7 +53,7 @@ The official reference demonstrates the same `OpenAI()` client,
 
 For the supported canonical request shape, explicit model, input items,
 function tools, tool choice, parallel-tool setting, `store=false`, reasoning
-effort (including `medium` and `low`), include list, and text/schema object
+effort (including `medium`, `low`, and `max`), include list, and text/schema object
 survive preparation without value substitution. The backend requires
 `stream=true` on the wire even for a public non-streaming call, and CBS
 normalizes shorthand string/message input to the backend's explicit item shape.

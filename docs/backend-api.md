@@ -135,13 +135,16 @@ With the default client settings, the prepared payload includes:
 
 `gpt-5.6-sol` is the checked-in client's local default. It is not evidence that
 the undocumented backend exposes that model to every account or rollout.
+An explicit `gpt-6-astra` request is forwarded without catalog preflight; CBS
+does not infer account availability from either its local default or catalog
+enumeration.
 
 Supported optional fields are normalized before transmission. Parameters known
 to be unsupported by this backend raise locally rather than being silently
 ignored. Canonical explicit input items, function tools, `store=false`, text and
-schema objects, and reasoning efforts including `medium` and `low` retain their
-values. `max_output_tokens` remains an explicit pre-transport error because no
-verified Codex-backend equivalent exists.
+schema objects, and reasoning efforts including `medium`, `low`, and `max`
+retain their values. `max_output_tokens` remains an explicit pre-transport
+error because no verified Codex-backend equivalent exists.
 
 Top-level Responses `input` must be a string or list. Strings become one user
 message; list entries may be role-and-content message shorthand or typed

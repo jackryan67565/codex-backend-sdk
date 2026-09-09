@@ -7,7 +7,7 @@ from typing import Any, Generic, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
-ReasoningEffort = Literal["minimal", "low", "medium", "high", "xhigh"]
+ReasoningEffort = Literal["minimal", "low", "medium", "high", "xhigh", "max"]
 ReasoningSummary = Literal["concise", "detailed", "auto"]
 ReasoningContext = Literal["current_turn", "all_turns"]
 Verbosity = Literal["low", "medium", "high"]

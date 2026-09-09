@@ -9,6 +9,7 @@ from codex_backend_sdk import (
     OpenAI,
     Reasoning,
     ReasoningContext,
+    ReasoningEffort,
     Response,
     ResponseStreamEvent,
     ServiceTier,
@@ -74,6 +75,22 @@ def test_reasoning_context_uses_the_verified_official_field_shape():
 
     assert reasoning.context == "all_turns"
     assert reasoning.effort == "low"
+
+
+def test_reasoning_effort_includes_astra_max_and_parses_backend_value():
+    assert get_args(ReasoningEffort) == (
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    )
+
+    response = Response.model_validate({"reasoning": {"effort": "max"}})
+
+    assert response.reasoning is not None
+    assert response.reasoning.effort == "max"
 
 
 def test_nonstandard_custody_lifecycle_is_not_on_primary_surface():

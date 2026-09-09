@@ -254,9 +254,20 @@ def test_differential_baseline_is_pinned_openai_2_46_0():
     assert official_openai.__version__ == _PINNED_OPENAI_VERSION
 
 
-@pytest.mark.parametrize("effort", ["medium", "low"])
-def test_supported_prepared_body_matches_pinned_official_values(effort: str):
+@pytest.mark.parametrize(
+    ("model", "effort"),
+    [
+        ("model-explicit", "medium"),
+        ("model-explicit", "low"),
+        ("gpt-6-astra", "max"),
+    ],
+)
+def test_supported_prepared_body_matches_pinned_official_values(
+    model: str,
+    effort: str,
+):
     kwargs = _supported_kwargs(effort)
+    kwargs["model"] = model
     official_body = _official_body(kwargs)
     client, adapter = _cbs_client([_http_response()])
 
@@ -265,6 +276,7 @@ def test_supported_prepared_body_matches_pinned_official_values(effort: str):
     cbs_body = _request_body(adapter.requests[0])
     for key in kwargs:
         assert cbs_body[key] == official_body[key]
+    assert cbs_body["model"] == model
     assert cbs_body["reasoning"]["effort"] == effort
     assert set(cbs_body) - set(official_body) == {"stream"}
     assert cbs_body["stream"] is True

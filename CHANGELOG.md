@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-09-09
+
+### Added
+- Add explicit opt-in documentation and offline conformance coverage for the
+  `gpt-6-astra` model ID while retaining `gpt-5.6-sol` as the client default.
+
+### Changed
+- Extend the public and parsed `ReasoningEffort` type with `max`, matching both
+  the pinned `openai==2.46.0` baseline and GPT-6 Astra's documented reasoning
+  range.
+
+### Tests
+- Verify against the pinned official client that `gpt-6-astra` and explicit
+  `reasoning.effort="max"` survive request preparation unchanged.
+- Verify that a terminal backend Response reporting `max` parses successfully.
+
+### Packaging
+- Bump the local-install package to `0.7.0`; no live backend call was used to
+  establish this checkpoint.
+
 ## [0.6.3] - 2026-08-27
 
 ### Fixed

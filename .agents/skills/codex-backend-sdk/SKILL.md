@@ -24,6 +24,12 @@ The current compatibility baseline is `openai==2.46.0`, and the default model
 is exactly `gpt-5.6-sol`. Callers may override the model at client or request
 scope; the default does not prove account availability.
 
+For Astra work, select `model="gpt-6-astra"` explicitly. CBS preserves that
+model ID and `reasoning={"effort": "max"}` on the supported Responses path and
+can parse a backend-reported `max` effort. This is an offline-verified adapter
+capability, not proof that the user's ChatGPT account or current backend rollout
+will serve Astra. Do not infer availability from catalog inclusion or omission.
+
 ## Use the official-shaped path
 
 Prefer the standard client surface:

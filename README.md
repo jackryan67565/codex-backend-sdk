@@ -32,6 +32,24 @@ Omitting `model` selects the current checkout's client default,
 to override it. This local default does not guarantee availability for every
 ChatGPT account or rollout.
 
+GPT-6 Astra is selectable as an explicit opt-in model on the supported
+Responses path:
+
+```python
+response = client.responses.create(
+    model="gpt-6-astra",
+    input="Solve this carefully.",
+    reasoning={"effort": "max"},
+)
+```
+
+CBS preserves the exact model ID and `max` effort through request preparation,
+and parses a backend-reported `max` effort. This is compatibility support, not
+proof that the undocumented ChatGPT Codex backend enables Astra for every
+account or rollout. The official Platform's Astra-only WebSocket steering,
+configuration updates, hosted tools, and other surfaces remain outside CBS's
+agent-safe subset.
+
 The compatibility target is the supported subset, not the full official SDK.
 CBS pins `openai==2.46.0` as its differential-test baseline; the
 official package is a development dependency, not a runtime dependency.
@@ -104,27 +122,23 @@ cd codex-backend-sdk
 pip install -e .
 ```
 
-### Install the 0.6.2 wheel in another project
+### Install the 0.7.0 wheel in another project
 
 Release artifacts are built locally into the Git-ignored `dist/` directory.
-Install the `0.6.2` wheel directly into a target project's virtual environment:
+Install the `0.7.0` wheel directly into a target project's virtual environment:
 
 ```bash
 uv pip install \
   --python /absolute/path/to/project/.venv/bin/python \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.6.2-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.7.0-py3-none-any.whl
 ```
 
 Or, when that virtual environment includes pip:
 
 ```bash
 /absolute/path/to/project/.venv/bin/python -m pip install \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.6.2-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.7.0-py3-none-any.whl
 ```
-
-That tagged wheel predates the 0.6.3 input-validation repair. Until a 0.6.3
-artifact is explicitly built and checkpointed, use the editable installation
-below for the repaired checkout; do not rebuild different contents as 0.6.2.
 
 Because `dist/` is not tracked, a fresh clone may not contain the artifact.
 Build from the tagged checkout before local distribution, and never substitute
