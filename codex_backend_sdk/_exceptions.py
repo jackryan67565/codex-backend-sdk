@@ -81,18 +81,41 @@ class APIStatusError(APIError):
 
 
 class APIConnectionError(APIError):
+    status_code: int | None
+    request_id: str | None
+    response_headers: Mapping[str, str] | None
+    partial_response_body: bytes | None
+    response_body_complete: bool | None
+    retries_taken: int | None
+
     def __init__(
         self,
         *,
         message: str = "Connection error.",
         request: requests.PreparedRequest,
+        status_code: int | None = None,
+        request_id: str | None = None,
+        response_headers: Mapping[str, str] | None = None,
+        partial_response_body: bytes | None = None,
+        response_body_complete: bool | None = None,
+        retries_taken: int | None = None,
     ) -> None:
         super().__init__(message, request, body=None)
+        self.status_code = status_code
+        self.request_id = request_id
+        self.response_headers = (
+            requests.structures.CaseInsensitiveDict(response_headers)
+            if response_headers is not None
+            else None
+        )
+        self.partial_response_body = partial_response_body
+        self.response_body_complete = response_body_complete
+        self.retries_taken = retries_taken
 
 
 class APITimeoutError(APIConnectionError):
-    def __init__(self, request: requests.PreparedRequest) -> None:
-        super().__init__(message="Request timed out.", request=request)
+    def __init__(self, request: requests.PreparedRequest, **kwargs: Any) -> None:
+        super().__init__(message="Request timed out.", request=request, **kwargs)
 
 
 class BadRequestError(APIStatusError):

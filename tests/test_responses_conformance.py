@@ -11,6 +11,7 @@ import openai as official_openai
 import pytest
 import requests
 from requests.adapters import BaseAdapter
+from urllib3.exceptions import ProtocolError
 
 from codex_backend_sdk import (
     APIConnectionError,
@@ -90,6 +91,33 @@ def _http_response(
         "response": _TERMINAL_RESPONSE,
     })
     response._content_consumed = True
+    return response
+
+
+class InterruptedResponseBody:
+    def __init__(self, partial_body: bytes) -> None:
+        self.partial_body = partial_body
+        self.closed = False
+
+    def stream(self, chunk_size: int, decode_content: bool = True):
+        yield self.partial_body
+        raise ProtocolError("synthetic interrupted chunked body")
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def _interrupted_http_response(
+    partial_body: bytes,
+    *,
+    headers: dict[str, str] | None = None,
+) -> requests.Response:
+    response = requests.Response()
+    response.status_code = 200
+    response.headers.update(headers or {})
+    response.raw = InterruptedResponseBody(partial_body)
+    response._content = False
+    response._content_consumed = False
     return response
 
 
@@ -199,6 +227,48 @@ def _official_retry_attempts(max_retries: int) -> int:
     finally:
         client.close()
     return attempts
+
+
+def _official_interrupted_read_outcome(max_retries: int) -> tuple[Any, int]:
+    partial_body = _sse({
+        "type": "response.output_text.delta",
+        "delta": "partial",
+    })
+
+    class InterruptedStream(httpx.SyncByteStream):
+        def __iter__(self):
+            yield partial_body
+            raise httpx.ReadError("synthetic interrupted body")
+
+    class ReadTransport(httpx.BaseTransport):
+        def __init__(self) -> None:
+            self.attempts = 0
+
+        def handle_request(self, request: httpx.Request) -> httpx.Response:
+            self.attempts += 1
+            if self.attempts == 1:
+                return httpx.Response(
+                    200,
+                    headers={"x-request-id": "req_partial"},
+                    stream=InterruptedStream(),
+                    request=request,
+                )
+            return httpx.Response(200, json=_TERMINAL_RESPONSE, request=request)
+
+    transport = ReadTransport()
+    client = official_openai.OpenAI(
+        api_key="synthetic",
+        max_retries=max_retries,
+        http_client=httpx.Client(transport=transport),
+    )
+    try:
+        try:
+            outcome = client.responses.with_raw_response.create(input="Hi")
+        except official_openai.APIConnectionError as exc:
+            outcome = exc
+        return outcome, transport.attempts
+    finally:
+        client.close()
 
 
 def _request_body(request: requests.PreparedRequest) -> dict[str, Any]:
@@ -358,6 +428,85 @@ def test_raw_response_exposes_sanitized_request_response_and_request_id():
         assert all(hasattr(official_raw, name) for name in expected_surface)
     finally:
         official_client.close()
+
+
+def test_interrupted_non_streaming_body_preserves_partial_custody_on_connection_error():
+    partial_body = _sse({
+        "type": "response.output_text.delta",
+        "delta": "partial",
+    })
+    interrupted_response = _interrupted_http_response(
+        partial_body,
+        headers={
+            "Content-Type": "text/event-stream",
+            "X-Request-ID": "req_partial",
+            "Set-Cookie": "sensitive-cookie",
+        },
+    )
+    client, adapter = _cbs_client([interrupted_response], max_retries=0)
+
+    with pytest.raises(APIConnectionError) as caught:
+        client.responses.with_raw_response.create(
+            model="model-explicit",
+            input="Hi",
+            store=False,
+        )
+
+    official_error, official_attempts = _official_interrupted_read_outcome(0)
+    exc = caught.value
+    assert type(exc).__name__ == type(official_error).__name__
+    assert exc.body is None
+    assert exc.status_code == 200
+    assert exc.request_id == "req_partial"
+    assert exc.response_headers["Content-Type"] == "text/event-stream"
+    assert "Set-Cookie" not in exc.response_headers
+    assert exc.partial_response_body == partial_body
+    assert exc.response_body_complete is False
+    assert exc.retries_taken == 0
+    assert exc.request is interrupted_response.request
+    assert _request_body(exc.request)["model"] == "model-explicit"
+    assert "Authorization" not in exc.request.headers
+    assert "ChatGPT-Account-ID" not in exc.request.headers
+    assert len(adapter.requests) == 1
+    assert official_attempts == 1
+    assert interrupted_response.raw.closed is True
+
+
+def test_configured_retries_apply_to_non_streaming_body_read_failures():
+    partial_body = _sse({
+        "type": "response.output_text.delta",
+        "delta": "partial",
+    })
+    interrupted_response = _interrupted_http_response(partial_body)
+    client, adapter = _cbs_client(
+        [interrupted_response, _http_response()],
+        max_retries=1,
+    )
+
+    response = client.responses.create(input="Hi")
+    official_outcome, official_attempts = _official_interrupted_read_outcome(1)
+
+    assert response.id == "resp_backend"
+    assert not isinstance(official_outcome, official_openai.APIConnectionError)
+    assert len(adapter.requests) == official_attempts == 2
+    assert interrupted_response.raw.closed is True
+
+
+def test_streaming_body_read_failure_keeps_incremental_delivery_semantics():
+    partial_event = {
+        "type": "response.output_text.delta",
+        "delta": "partial",
+    }
+    interrupted_response = _interrupted_http_response(_sse(partial_event))
+    client, adapter = _cbs_client([interrupted_response], max_retries=0)
+
+    events = client.responses.create(input="Hi", stream=True)
+
+    assert next(events).model_dump(exclude_unset=True) == partial_event
+    with pytest.raises(requests.exceptions.ChunkedEncodingError):
+        next(events)
+    assert len(adapter.requests) == 1
+    assert interrupted_response.raw.closed is True
 
 
 def test_raw_response_create_keeps_the_create_signature():

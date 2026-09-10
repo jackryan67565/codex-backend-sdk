@@ -55,6 +55,7 @@ class FakeClient(OpenAI):
         *,
         body,
         stream=False,
+        buffer_response_body=False,
         timeout=None,
     ):
         self.posts.append(("/responses", body, stream))
@@ -127,6 +128,7 @@ class ParseFakeClient(FakeClient):
         *,
         body,
         stream=False,
+        buffer_response_body=False,
         timeout=None,
     ):
         self.posts.append(("/responses", body, stream))
@@ -215,6 +217,7 @@ class TierReportingFakeClient(FakeClient):
         *,
         body,
         stream=False,
+        buffer_response_body=False,
         timeout=None,
     ):
         self.posts.append(("/responses", body, stream))
@@ -235,6 +238,7 @@ class ReasoningContextFakeClient(FakeClient):
         *,
         body,
         stream=False,
+        buffer_response_body=False,
         timeout=None,
     ):
         self.posts.append(("/responses", body, stream))

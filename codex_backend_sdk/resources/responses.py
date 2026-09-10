@@ -133,17 +133,14 @@ class Responses:
             tool_choice=value("tool_choice"),
             tools=value("tools"),
         )
+        stream = value("stream")
+        stream_enabled = bool(stream) if _is_given(stream) else False
         response = self._client._request_response(
             body=request.payload,
             stream=True,
+            buffer_response_body=not stream_enabled,
             timeout=value("timeout"),
         )
-        stream = value("stream")
-        stream_enabled = bool(stream) if _is_given(stream) else False
-        if not stream_enabled:
-            # Eagerly buffer the body like openai-python's non-streaming raw
-            # wrapper. The getattr keeps lightweight test transports usable.
-            _ = getattr(response, "content", None)
 
         def parse() -> Response | Iterator[ResponseStreamEvent]:
             events = stream_response_events(response)

@@ -84,9 +84,14 @@ request objects immediately after transmission and before a response or
 exception escapes. Official-compatible status, timeout, and connection error
 categories remain available without carrying the credentials
 ([`codex_backend_sdk/_transport.py:66`](codex_backend_sdk/_transport.py#L66)).
-Synthetic offline coverage exercises status, redirect, timeout, and connection
-failures across all three resources
-([`tests/test_transport_sanitization.py:81`](tests/test_transport_sanitization.py#L81)).
+Interrupted non-streaming response bodies retain only the sanitized prepared
+request, safe response metadata, and explicitly partial application-body bytes;
+credential-bearing response headers are stripped before this evidence is
+copied. Synthetic offline coverage exercises status, redirect, timeout, and
+connection failures across all three resources plus interrupted chunked SSE
+bodies
+([`tests/test_transport_sanitization.py:81`](tests/test_transport_sanitization.py#L81),
+[`tests/test_responses_conformance.py`](tests/test_responses_conformance.py)).
 
 ## Medium findings
 
@@ -119,7 +124,7 @@ backoff delays at eight seconds, and compaction remains non-retryable
 
 ## Verification evidence
 
-- Offline suite on 2026-08-26: `144 passed, 13 skipped`.
+- Offline suite on 2026-09-09: `165 passed, 13 skipped`.
 - Python compilation completed for `codex_backend_sdk` and `tests`.
 - `git diff --check` completed without whitespace errors.
 - Source URL scan found one connection base:
@@ -128,7 +133,7 @@ backoff delays at eight seconds, and compaction remains non-retryable
   credential representations, symlinked auth files, stale credentials, unsafe
   routes and methods, caller headers/query, hosted tools, redirects, proxy
   inheritance, configured Responses retries, retained-request credential
-  sanitization, and response cleanup.
+  sanitization, interrupted-body partial custody, and response cleanup.
 
 ## Deployment requirement
 

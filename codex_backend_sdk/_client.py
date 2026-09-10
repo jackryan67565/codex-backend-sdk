@@ -128,6 +128,7 @@ class CodexClient:
         *,
         body: dict[str, Any],
         stream: bool = False,
+        buffer_response_body: bool = False,
         timeout: Any = _UNSET,
     ) -> requests.Response:
         credentials = self.__credentials
@@ -147,6 +148,7 @@ class CodexClient:
             json_body=body,
             headers=headers,
             stream=stream,
+            buffer_response_body=buffer_response_body,
             timeout=self._resolve_timeout(timeout),
             max_retries=self._max_retries,
             retry_base_delay=self._retry_base_delay,

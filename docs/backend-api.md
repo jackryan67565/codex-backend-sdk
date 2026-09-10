@@ -167,6 +167,15 @@ error body plus safe request ID. Timeouts and connection failures use
 `APITimeoutError` and `APIConnectionError`. Raw or error bodies can contain
 sensitive input/output and must not be logged.
 
+For public non-streaming calls, entity-body buffering occurs inside the
+configured Responses retry boundary. If the body is interrupted after headers
+arrive, the final failure is an `APIConnectionError` carrying its sanitized
+prepared request plus `status_code`, safe `request_id` and `response_headers`,
+exact `partial_response_body`, `response_body_complete=False`, and
+`retries_taken`. These are partial application-body bytes after HTTP decoding,
+not raw chunk frames. They are custody evidence only and are never parsed as a
+terminal event or completed Response. Public streaming iteration is unchanged.
+
 ### Service tier
 
 `responses.create(...)` and `responses.parse(...)` accept omitted

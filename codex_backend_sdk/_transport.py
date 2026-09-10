@@ -43,6 +43,7 @@ def request_with_retries(
     params: Optional[Mapping[str, str]] = None,
     json_body: Optional[dict[str, Any]] = None,
     stream: bool = False,
+    buffer_response_body: bool = False,
     retry_non_idempotent: bool = False,
     translate_errors: bool = False,
 ) -> requests.Response:
@@ -74,6 +75,36 @@ def request_with_retries(
                 response.close()
                 sleep_before_retry(response, attempt, retry_base_delay=retry_base_delay)
                 continue
+            if buffer_response_body:
+                read_failure = _buffer_response_body(response)
+                if read_failure is not None:
+                    partial_body, exc = read_failure
+                    _strip_exception_request_credentials(exc)
+                    response.close()
+                    if may_retry and attempt < max_retries:
+                        sleep_before_retry(
+                            None,
+                            attempt,
+                            retry_base_delay=retry_base_delay,
+                        )
+                        continue
+                    if translate_errors:
+                        request = _response_request(response)
+                        error_options = {
+                            "status_code": response.status_code,
+                            "request_id": response.headers.get("x-request-id"),
+                            "response_headers": response.headers,
+                            "partial_response_body": partial_body,
+                            "response_body_complete": False,
+                            "retries_taken": attempt,
+                        }
+                        if isinstance(exc, requests.Timeout):
+                            raise APITimeoutError(request, **error_options) from exc
+                        raise APIConnectionError(
+                            request=request,
+                            **error_options,
+                        ) from exc
+                    raise exc
             if response.status_code >= 400:
                 if translate_errors:
                     response.content
@@ -103,6 +134,23 @@ def request_with_retries(
     raise RuntimeError("Request retry loop exhausted")
 
 
+def _buffer_response_body(
+    response: requests.Response,
+) -> tuple[bytes, requests.RequestException] | None:
+    if response._content_consumed:
+        return None
+    partial_body = bytearray()
+    try:
+        for chunk in response.iter_content(chunk_size=10 * 1024):
+            if chunk:
+                partial_body.extend(chunk)
+    except requests.RequestException as exc:
+        return bytes(partial_body), exc
+    response._content = bytes(partial_body)
+    response._content_consumed = True
+    return None
+
+
 def _strip_response_request_credentials(response: requests.Response) -> None:
     _strip_request_credentials(getattr(response, "request", None))
 
@@ -110,6 +158,18 @@ def _strip_response_request_credentials(response: requests.Response) -> None:
 def _strip_response_sensitive_headers(response: requests.Response) -> None:
     for name in _SENSITIVE_RESPONSE_HEADERS:
         response.headers.pop(name, None)
+
+
+def _response_request(response: requests.Response) -> requests.PreparedRequest:
+    request = response.request
+    if request is None:
+        request = requests.Request(
+            "POST",
+            response.url
+            or "https://chatgpt.com/backend-api/codex/responses",
+        ).prepare()
+    _strip_request_credentials(request)
+    return request
 
 
 def _strip_exception_request_credentials(exc: requests.RequestException) -> None:

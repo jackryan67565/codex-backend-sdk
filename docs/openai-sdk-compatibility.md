@@ -88,11 +88,24 @@ HTTP failures use the pinned official public taxonomy (`BadRequestError`,
 status exception. Transport timeouts and connection failures use
 `APITimeoutError` and `APIConnectionError`.
 
+An interrupted entity-body read after response headers were received also uses
+`APIConnectionError`, matching pinned `openai==2.46.0`; `.request` is the actual
+sanitized prepared request and `.body` remains `None`. CBS adds bounded
+read-stage evidence unavailable from the official error: `status_code`, safe
+`request_id` and `response_headers`, exact `partial_response_body`,
+`response_body_complete=False`, and `retries_taken`. Partial bytes are the
+application entity body emitted by Requests after transfer/content decoding,
+not HTTP chunk frames. They remain explicitly incomplete and are never parsed
+into a Response or used to synthesize output, usage, status, or terminality.
+
 `max_retries` applies to Responses creation with the pinned official retry
 conditions: connection/timeouts, 408, 409, 429, 5xx, and explicit
 `x-should-retry`. `max_retries=0` performs at most one transport attempt; the
 default is two retries. This does not provide exactly-once delivery after an
 ambiguous failure. Compaction POSTs retain their existing no-retry behavior.
+Non-streaming response-body read failures occur inside that same retry boundary;
+streaming iteration remains incremental and is not replayed by this buffering
+path.
 
 ### Service-tier subset
 

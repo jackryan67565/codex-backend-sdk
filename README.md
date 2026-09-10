@@ -122,22 +122,22 @@ cd codex-backend-sdk
 pip install -e .
 ```
 
-### Install the 0.7.0 wheel in another project
+### Install the 0.7.1 wheel in another project
 
 Release artifacts are built locally into the Git-ignored `dist/` directory.
-Install the `0.7.0` wheel directly into a target project's virtual environment:
+Install the `0.7.1` wheel directly into a target project's virtual environment:
 
 ```bash
 uv pip install \
   --python /absolute/path/to/project/.venv/bin/python \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.7.0-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.7.1-py3-none-any.whl
 ```
 
 Or, when that virtual environment includes pip:
 
 ```bash
 /absolute/path/to/project/.venv/bin/python -m pip install \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.7.0-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.7.1-py3-none-any.whl
 ```
 
 Because `dist/` is not tracked, a fresh clone may not contain the artifact.
@@ -263,6 +263,19 @@ including `BadRequestError`, `AuthenticationError`, `RateLimitError`, and
 `InternalServerError`. Status errors preserve the backend error body and safe
 request ID. Timeouts and connection failures raise `APITimeoutError` and
 `APIConnectionError`.
+
+If a public non-streaming call receives response headers and then the HTTP
+entity body is interrupted, CBS raises `APIConnectionError` before returning a
+raw wrapper. Like the pinned official client, the exception retains the
+sanitized application request and keeps `body=None`. CBS additionally exposes
+only the already observed safe material needed to classify the attempt:
+`status_code`, `request_id`, `response_headers`, `partial_response_body`,
+`response_body_complete=False`, and `retries_taken`. The partial body contains
+the exact application bytes yielded by Requests after HTTP transfer/content
+decoding; it does not include chunk framing and is never parsed as output,
+usage, terminality, or completion. Credential-bearing request and response
+headers remain removed. Streaming callers continue receiving events
+incrementally and retain their existing iterator error behavior.
 
 The client default is `max_retries=2`, matching the pinned official client's
 retry-count default for this path. Set `max_retries=0` when a caller requires at

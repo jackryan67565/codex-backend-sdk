@@ -139,6 +139,16 @@ headers, `raw.content`, and `raw.parse()`. Authentication/account headers and
 credential-bearing response headers are removed. Raw request or response bodies
 may still contain sensitive user or model content, so do not log them.
 
+If a non-streaming body is interrupted before the raw wrapper returns, handle
+the resulting `APIConnectionError`. Its `.request` remains the sanitized exact
+application request and `.body` remains `None`; CBS may also provide
+`status_code`, safe `request_id` and `response_headers`,
+`partial_response_body`, `response_body_complete=False`, and `retries_taken`.
+Treat partial bytes as sensitive, incomplete custody evidence only. Never parse
+them as a Response or infer output, usage, terminality, completion, or whether
+the backend expended work. Streaming iterator behavior is separate and remains
+incremental.
+
 CBS-owned runtime connections are limited to the three exact `chatgpt.com`
 Codex routes documented by the project. Do not add a base URL, caller headers,
 proxies, redirects, new routes, or new domains as part of an integration.

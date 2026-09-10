@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-09-09
+
+### Fixed
+- Translate interrupted non-streaming HTTP entity-body reads, including
+  `ChunkedEncodingError`, into the official-style `APIConnectionError` instead
+  of leaking the Requests exception before a raw wrapper can be returned.
+- Preserve the actual sanitized prepared request, received status, safe request
+  ID and response headers, exact partial application-body bytes, explicit
+  incomplete-body state, and retry count on the final read-stage error.
+- Move non-streaming response buffering inside the existing retry boundary so
+  configured retries match the pinned official client's read-failure behavior;
+  `max_retries=0` still performs exactly one send.
+
+### Security
+- Keep bearer/account headers and credential-bearing response headers absent
+  from every retained read-stage error surface. Partial bytes are never parsed
+  or represented as a completed Response.
+
+### Tests
+- Add an offline interrupted-chunked-SSE regression, a pinned
+  `openai==2.46.0` differential retry check, and coverage that incremental
+  streaming delivery remains unchanged.
+
+### Packaging
+- Bump the local-install package to `0.7.1`; no provider call was made for this
+  repair.
+
 ## [0.7.0] - 2026-09-09
 
 ### Added
