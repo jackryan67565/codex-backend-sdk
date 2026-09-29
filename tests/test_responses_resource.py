@@ -524,6 +524,24 @@ def test_responses_parse_sends_strict_schema_and_returns_parsed_response():
     assert payload["text"]["format"]["schema"]["additionalProperties"] is False
 
 
+def test_responses_parse_forwards_prompt_cache_options():
+    client = ParseFakeClient()
+
+    client.responses.parse(
+        input="Extract the person",
+        text_format=ParsedPerson,
+        prompt_cache_key="stable-schema:v1",
+        prompt_cache_options={"mode": "explicit", "ttl": "30m"},
+    )
+
+    payload = client.posts[0][1]
+    assert payload["prompt_cache_key"] == "stable-schema:v1"
+    assert payload["prompt_cache_options"] == {
+        "mode": "explicit",
+        "ttl": "30m",
+    }
+
+
 def test_responses_parse_rejects_existing_text_format():
     client = ParseFakeClient()
 
@@ -626,6 +644,7 @@ def test_responses_compact_sends_shared_request_fields():
         reasoning={"effort": "medium"},
         service_tier="priority",
         prompt_cache_key="cache-key",
+        prompt_cache_options={"mode": "explicit", "ttl": "30m"},
         text={"verbosity": "low"},
     )
 
@@ -658,6 +677,7 @@ def test_responses_compact_sends_shared_request_fields():
         "reasoning": {"effort": "medium"},
         "service_tier": "priority",
         "prompt_cache_key": "cache-key",
+        "prompt_cache_options": {"mode": "explicit", "ttl": "30m"},
         "text": {"verbosity": "low"},
     }
 

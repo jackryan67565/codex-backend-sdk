@@ -46,6 +46,7 @@ class ResponsesCreateRequest(CodexBaseModel):
     include: list[str]
     parallel_tool_calls: bool
     prompt_cache_key: Optional[str]
+    prompt_cache_options: Any
     reasoning: Any
     service_tier: Optional[ServiceTier]
     text: Any
@@ -97,9 +98,18 @@ class ResponsesCreateRequest(CodexBaseModel):
         prompt_cache_key = (
             None if not _is_given(params["prompt_cache_key"]) else params["prompt_cache_key"]
         )
+        prompt_cache_options = (
+            None
+            if not _is_given(params["prompt_cache_options"])
+            else params["prompt_cache_options"]
+        )
         service_tier = _validate_create_service_tier(params["service_tier"])
         if prompt_cache_key is not None:
             payload["prompt_cache_key"] = prompt_cache_key
+        if prompt_cache_options is not None:
+            payload["prompt_cache_options"] = normalize_prompt_cache_options(
+                prompt_cache_options
+            )
         if service_tier is not None:
             payload["service_tier"] = service_tier
         if reasoning is not None:
@@ -114,6 +124,7 @@ class ResponsesCreateRequest(CodexBaseModel):
             include=include,
             parallel_tool_calls=payload["parallel_tool_calls"],
             prompt_cache_key=prompt_cache_key,
+            prompt_cache_options=payload.get("prompt_cache_options"),
             reasoning=payload.get("reasoning"),
             service_tier=service_tier,
             text=payload.get("text"),
@@ -317,6 +328,10 @@ def normalize_reasoning(reasoning: Any) -> dict[str, Any]:
 
 def normalize_text(text: Any) -> dict[str, Any]:
     return _as_dict(text)
+
+
+def normalize_prompt_cache_options(options: Any) -> dict[str, Any]:
+    return _as_dict(options)
 
 
 def merge_text_format(text: Any, fmt: ResponseFormatJsonSchema) -> dict[str, Any]:

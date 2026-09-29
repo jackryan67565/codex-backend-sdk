@@ -45,6 +45,8 @@ def test_responses_create_keeps_supported_official_keyword_names():
         "model",
         "parallel_tool_calls",
         "previous_response_id",
+        "prompt_cache_key",
+        "prompt_cache_options",
         "reasoning",
         "service_tier",
         "store",

@@ -352,6 +352,123 @@ def test_supported_prepared_body_matches_pinned_official_values(
     assert cbs_body["stream"] is True
 
 
+def test_prompt_cache_request_matches_pinned_official_shape_and_preserves_prefix():
+    stable_block = {
+        "type": "input_text",
+        "text": "Stable reference material.",
+        "prompt_cache_breakpoint": {"mode": "explicit"},
+    }
+    changing_block = {"type": "input_text", "text": "Changing case input."}
+    kwargs = {
+        "model": "gpt-5.6-sol",
+        "input": [
+            {
+                "type": "message",
+                "role": "developer",
+                "content": [stable_block],
+            },
+            {
+                "type": "message",
+                "role": "user",
+                "content": [changing_block],
+            },
+        ],
+        "prompt_cache_key": "tma:stable-reference:v1",
+        "prompt_cache_options": {"mode": "explicit", "ttl": "30m"},
+        "store": False,
+    }
+    official_body = _official_body(kwargs)
+    client, adapter = _cbs_client([_http_response()])
+
+    client.responses.create(**kwargs)
+
+    cbs_body = _request_body(adapter.requests[0])
+    assert cbs_body["prompt_cache_key"] == official_body["prompt_cache_key"]
+    assert cbs_body["prompt_cache_options"] == official_body["prompt_cache_options"]
+    assert cbs_body["input"] == official_body["input"]
+    assert cbs_body["input"][0]["content"][0] == stable_block
+    assert cbs_body["input"][1]["content"][0] == changing_block
+
+
+def test_current_prompt_cache_prewarm_field_is_not_silently_dropped():
+    kwargs = {
+        "model": "gpt-5.6-sol",
+        "input": "Stable cache material.",
+        "prompt_cache_options": {"prewarm": True},
+        "store": False,
+    }
+    official_body = _official_body(kwargs)
+    client, adapter = _cbs_client([_http_response()])
+
+    client.responses.create(**kwargs)
+
+    cbs_body = _request_body(adapter.requests[0])
+    assert official_body["prompt_cache_options"] == {"prewarm": True}
+    assert cbs_body["prompt_cache_options"] == official_body["prompt_cache_options"]
+
+
+def test_prompt_cache_response_fields_and_usage_are_backend_sourced():
+    terminal = {
+        **_TERMINAL_RESPONSE,
+        "prompt_cache_key": "backend-reported-key",
+        "prompt_cache_options": {"mode": "explicit", "ttl": "30m"},
+        "usage": {
+            "input_tokens": 1200,
+            "output_tokens": 20,
+            "total_tokens": 1220,
+            "input_tokens_details": {
+                "cached_tokens": 768,
+                "cache_write_tokens": 256,
+            },
+        },
+    }
+    client, _ = _cbs_client([_http_response(body=_sse({
+        "type": "response.completed",
+        "response": terminal,
+    }))])
+
+    response = client.responses.create(
+        input="Hi",
+        prompt_cache_key="locally-requested-key",
+        prompt_cache_options={"mode": "implicit"},
+    )
+
+    assert response.prompt_cache_key == "backend-reported-key"
+    assert response.prompt_cache_options is not None
+    assert response.prompt_cache_options.mode == "explicit"
+    assert response.prompt_cache_options.ttl == "30m"
+    assert response.usage is not None
+    assert response.usage.input_tokens_details is not None
+    assert response.usage.input_tokens_details.cached_tokens == 768
+    assert response.usage.input_tokens_details.cache_write_tokens == 256
+
+
+def test_prompt_cache_backend_rejection_preserves_official_error_shape():
+    error = {
+        "message": "Unsupported parameter: prompt_cache_options",
+        "type": "invalid_request_error",
+        "param": "prompt_cache_options",
+        "code": "unsupported_parameter",
+    }
+    client, adapter = _cbs_client([_http_response(
+        400,
+        body=json.dumps({"error": error}).encode(),
+        headers={"Content-Type": "application/json", "X-Request-ID": "req_cache"},
+    )])
+
+    with pytest.raises(BadRequestError) as caught:
+        client.responses.create(
+            input="Hi",
+            prompt_cache_options={"mode": "explicit", "ttl": "30m"},
+        )
+
+    assert caught.value.body == error
+    assert caught.value.param == "prompt_cache_options"
+    assert caught.value.code == "unsupported_parameter"
+    assert caught.value.request_id == "req_cache"
+    assert len(adapter.requests) == 1
+
+
 def test_output_limit_is_explicitly_rejected_instead_of_dropped():
     official_body = _official_body({
         "model": "model-explicit",

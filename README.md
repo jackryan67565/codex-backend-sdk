@@ -5,6 +5,7 @@ Agent-safe, unofficial Python client for the ChatGPT Codex Responses backend.
 The package intentionally exposes a narrow synchronous surface:
 
 - stateless Responses creation, streaming, parsing, and compaction;
+- OpenAI-shaped prompt-cache request fields and usage diagnostics;
 - Codex model listing and retrieval;
 - caller-executed function-call descriptions and results.
 
@@ -122,22 +123,22 @@ cd codex-backend-sdk
 pip install -e .
 ```
 
-### Install the 0.7.1 wheel in another project
+### Install the 0.8.0 wheel in another project
 
 Release artifacts are built locally into the Git-ignored `dist/` directory.
-Install the `0.7.1` wheel directly into a target project's virtual environment:
+Install the `0.8.0` wheel directly into a target project's virtual environment:
 
 ```bash
 uv pip install \
   --python /absolute/path/to/project/.venv/bin/python \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.7.1-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.8.0-py3-none-any.whl
 ```
 
 Or, when that virtual environment includes pip:
 
 ```bash
 /absolute/path/to/project/.venv/bin/python -m pip install \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.7.1-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.8.0-py3-none-any.whl
 ```
 
 Because `dist/` is not tracked, a fresh clone may not contain the artifact.
@@ -361,6 +362,51 @@ input, 81 output, 11 reasoning, and 0 cached tokens. The corrective manual
 replay reported 225 input, 75 output, 8 reasoning, and 0 cached tokens. Both
 used one transport attempt with `max_retries=0`. These measurements demonstrate
 usage reporting, not token savings.
+
+## Prompt caching
+
+CBS uses the standard Responses fields; there is no separate cache API:
+
+```python
+response = client.responses.create(
+    input=[
+        {
+            "role": "developer",
+            "content": [{
+                "type": "input_text",
+                "text": stable_reference,
+                "prompt_cache_breakpoint": {"mode": "explicit"},
+            }],
+        },
+        {"role": "user", "content": changing_case_input},
+    ],
+    prompt_cache_key="cases:reference-v1",
+    prompt_cache_options={"mode": "explicit", "ttl": "30m"},
+    store=False,
+)
+
+details = response.usage.input_tokens_details
+print(details.cached_tokens, details.cache_write_tokens)
+```
+
+CBS preserves the cache key, options, content-block breakpoint, conversation
+ordering, and backend-reported usage fields. It does not claim a hit, synthesize
+cache usage, or echo requested cache values into the Response. The undocumented
+ChatGPT Codex backend's acceptance and effective caching for
+`prompt_cache_options` still require a separately authorized live check; a
+backend rejection remains an ordinary typed HTTP error.
+
+Cache effectiveness is primarily a prompt-layout property. Put stable
+instructions, tools, schemas, and reference material first; put changing case
+metadata and user input afterward; keep the prefix and settings identical; and
+append history rather than rewriting earlier messages. See the focused
+[prompt-caching guide](docs/prompt-caching.md) for the runnable example, TMA
+guidance, accounting formula, backend limitations, and bounded smoke-test
+proposal.
+
+The existing `responses.compact(...)` method also accepts
+`prompt_cache_options` beside its existing `prompt_cache_key`; effective support
+on that separately routed backend operation is likewise unverified offline.
 
 ## Function calling
 

@@ -12,6 +12,8 @@ ReasoningSummary = Literal["concise", "detailed", "auto"]
 ReasoningContext = Literal["current_turn", "all_turns"]
 Verbosity = Literal["low", "medium", "high"]
 ServiceTier = Literal["default", "priority"]
+PromptCacheMode = Literal["implicit", "explicit"]
+PromptCacheTTL = Literal["30m"]
 ParsedT = TypeVar("ParsedT")
 
 
@@ -80,6 +82,11 @@ class ResponseUsage(CodexBaseModel):
     output_tokens_details: Optional[TokenDetails] = None
 
 
+class PromptCacheOptions(CodexBaseModel):
+    mode: Optional[PromptCacheMode] = None
+    ttl: Optional[PromptCacheTTL] = None
+
+
 class ResponseFormatJsonSchema(CodexBaseModel):
     type: Literal["json_schema"] = "json_schema"
     name: str
@@ -111,6 +118,7 @@ class Response(CodexBaseModel):
     previous_response_id: Optional[str] = None
     prompt: Any = None
     prompt_cache_key: Optional[str] = None
+    prompt_cache_options: Optional[PromptCacheOptions] = None
     prompt_cache_retention: Optional[str] = None
     reasoning: Optional[Reasoning] = None
     safety_identifier: Optional[str] = None

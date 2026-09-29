@@ -43,6 +43,9 @@ The official reference demonstrates the same `OpenAI()` client,
   wrapper shape for request bytes, safe HTTP metadata, request ID, received
   bytes, and `.parse()`.
 - `client.responses.parse(...)` for Pydantic structured output.
+- Standard prompt-caching fields on Responses creation: `prompt_cache_key`,
+  `prompt_cache_options`, and content-block `prompt_cache_breakpoint`, plus
+  terminal cached-input and cache-write usage diagnostics.
 - `client.responses.compact(...)` for the approved Codex compact route.
 - `client.models.list()` and `client.models.retrieve(...)`.
 - OpenAI-style Pydantic helpers such as `model_dump()`, `to_dict()`, and
@@ -168,6 +171,41 @@ response objects as stored for 30 days by default unless `store=false`; this
 adapter can confirm the wire request but cannot independently prove all
 operational retention behavior of the undocumented ChatGPT backend.
 
+### Prompt-caching compatibility
+
+The supported create/parse surface, and the existing compact operation where
+the same fields apply, now preserve the request names and structures used by
+the official Responses API:
+
+- `prompt_cache_key` remains an ordinary top-level string;
+- `prompt_cache_options` is forwarded as the caller supplied standard mapping;
+- `prompt_cache_breakpoint={"mode": "explicit"}` remains attached to its
+  original content block;
+- input item, message, and content ordering remain unchanged; and
+- terminal `cached_tokens` and `cache_write_tokens` remain backend-sourced.
+
+The pinned `openai==2.46.0` baseline types `mode` (`implicit` or `explicit`) and
+`ttl` (`30m`). Current official documentation also describes `prewarm`; CBS
+preserves that standard nested field if supplied. No option is translated into
+a CBS-only behavior. If the ChatGPT Codex backend rejects an option, the caller
+receives the existing official-style status exception, safe request ID, and
+backend error body.
+
+Offline differential tests establish request preservation and response parsing,
+not provider cache eligibility or a cache hit. The backend's effective support
+for the newer options has not been live-tested under this checkpoint.
+`prompt_cache_retention` remains an explicit local limitation because the Codex
+route was previously observed rejecting both official request values while
+choosing retention server-side.
+
+Explicit breakpoints belong on supported content blocks; implicit mode instead
+uses eligible message endings chosen by the provider. CBS preserves those
+structures but does not select, write, route, or inspect cache entries. The
+official Platform dashboard and Prompt Cache Diagnostics tool are also outside
+the SDK's three-route backend boundary. See [Prompt
+caching](prompt-caching.md) for caller layout guidance and the bounded live
+smoke-test proposal.
+
 ## Intentional incompatibilities
 
 These differences are part of the security contract rather than accidental
@@ -207,13 +245,13 @@ unrelated public APIs:
   retained request objects. The raw wrapper is therefore API-shaped and
   behaviorally comparable but not the official concrete HTTP response type.
 - `responses.create(...)` shares every currently exposed parameter name with the
-  official method. The official method additionally has `moderation`,
-  `prompt_cache_options`, and the intentionally unsafe `extra_headers`,
+  official method. The official method additionally has `moderation` and the
+  intentionally unsafe `extra_headers`,
   `extra_query`, and `extra_body` transport escapes.
 - `responses.parse(...)` also lacks the newer official `stream` and `verbosity`
   keywords in addition to the create-method gaps above.
 - `responses.compact(...)` needs a focused compatibility pass: the official
-  method includes `previous_response_id`, prompt-cache options/retention,
+  method includes `previous_response_id`, prompt-cache retention,
   `timeout`, and transport escapes, while this adapter currently exposes several
   backend-observed fields that are not in the official 2.46.0 signature.
 - The official convenience `responses.stream(...)` manager and broader response

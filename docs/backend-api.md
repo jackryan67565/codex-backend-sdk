@@ -146,6 +146,26 @@ schema objects, and reasoning efforts including `medium`, `low`, and `max`
 retain their values. `max_output_tokens` remains an explicit pre-transport
 error because no verified Codex-backend equivalent exists.
 
+Prompt-caching request material uses the official field names. CBS forwards
+`prompt_cache_key`, `prompt_cache_options`, and content-block
+`prompt_cache_breakpoint` in the JSON body while retaining input/content order.
+It does not add cache headers or change the fixed authentication, account, or
+originator headers. `prompt_cache_options` acceptance and effective cache
+behavior on this undocumented route remain unverified without a separately
+authorized live call. A backend rejection is preserved through the normal
+typed HTTP error path; CBS does not remove the field and retry.
+
+The terminal Response is authoritative for `prompt_cache_key`,
+`prompt_cache_options`, `usage.input_tokens_details.cached_tokens`, and
+`usage.input_tokens_details.cache_write_tokens`. Missing fields remain `None`;
+CBS never copies request values into the Response or converts missing usage to
+zero. The older `prompt_cache_retention` request field remains locally rejected
+because this route was previously observed returning HTTP 400 for it.
+
+The approved compact route also preserves `prompt_cache_key` and
+`prompt_cache_options` in its JSON body. This is wire-shape compatibility, not
+offline proof that the separate compact operation writes or reads a cache.
+
 Top-level Responses `input` must be a string or list. Strings become one user
 message; list entries may be role-and-content message shorthand or typed
 `message`, `reasoning`, `function_call`, `function_call_output`, or `compaction`

@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-09-29
+
+### Added
+- Add the standard `prompt_cache_options` keyword to Responses create, parse,
+  raw-create, and compact paths while retaining the existing
+  `prompt_cache_key` shape.
+- Add an ordinary OpenAI-shaped example with a stable developer prefix, an
+  explicit content-block breakpoint, and changing user suffixes.
+
+### Changed
+- Preserve cache option mappings, explicit content-block breakpoints, and
+  ordered input items through request preparation without introducing a CBS
+  cache or session abstraction.
+- Type backend-reported Response cache options and retain existing
+  `cached_tokens` and `cache_write_tokens` usage fields without request echoing
+  or missing-value synthesis.
+
+### Tests
+- Add offline differential coverage against pinned `openai==2.46.0` for cache
+  request preparation, response/usage parsing, parse forwarding, and typed
+  backend rejection with zero silent fallback.
+
+### Documentation
+- Document the unverified backend boundary, TMA-owned prompt-layout changes,
+  cache accounting, and a bounded three-call live smoke-test proposal. No live
+  request was made for this checkpoint.
+
+### Packaging
+- Bump the local-install package to `0.8.0`.
+
 ## [0.7.1] - 2026-09-09
 
 ### Fixed

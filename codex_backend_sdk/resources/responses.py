@@ -28,6 +28,7 @@ from ._responses_payloads import (
     collect_response,
     merge_text_format,
     normalize_input_item,
+    normalize_prompt_cache_options,
     normalize_reasoning,
     normalize_text,
     normalize_tools,
@@ -66,6 +67,7 @@ class Responses:
         previous_response_id: Any = _UNSET,
         prompt: Any = _UNSET,
         prompt_cache_key: Any = _UNSET,
+        prompt_cache_options: Any = _UNSET,
         prompt_cache_retention: Any = _UNSET,
         reasoning: Any = _UNSET,
         safety_identifier: Any = _UNSET,
@@ -127,6 +129,7 @@ class Responses:
             model=value("model"),
             parallel_tool_calls=value("parallel_tool_calls"),
             prompt_cache_key=value("prompt_cache_key"),
+            prompt_cache_options=value("prompt_cache_options"),
             reasoning=value("reasoning"),
             service_tier=value("service_tier"),
             text=value("text"),
@@ -172,6 +175,7 @@ class Responses:
         previous_response_id: Any = _UNSET,
         prompt: Any = _UNSET,
         prompt_cache_key: Any = _UNSET,
+        prompt_cache_options: Any = _UNSET,
         prompt_cache_retention: Any = _UNSET,
         reasoning: Any = _UNSET,
         safety_identifier: Any = _UNSET,
@@ -204,6 +208,7 @@ class Responses:
             previous_response_id=previous_response_id,
             prompt=prompt,
             prompt_cache_key=prompt_cache_key,
+            prompt_cache_options=prompt_cache_options,
             prompt_cache_retention=prompt_cache_retention,
             reasoning=reasoning,
             safety_identifier=safety_identifier,
@@ -239,6 +244,7 @@ class Responses:
         reasoning: Any = _UNSET,
         service_tier: Any = _UNSET,
         prompt_cache_key: Any = _UNSET,
+        prompt_cache_options: Any = _UNSET,
         text: Any = _UNSET,
     ) -> CompactedResponse:
         normalized_tools = normalize_tools(tools)
@@ -260,6 +266,10 @@ class Responses:
             payload["service_tier"] = service_tier
         if _is_given(prompt_cache_key) and prompt_cache_key is not None:
             payload["prompt_cache_key"] = prompt_cache_key
+        if _is_given(prompt_cache_options) and prompt_cache_options is not None:
+            payload["prompt_cache_options"] = normalize_prompt_cache_options(
+                prompt_cache_options
+            )
         if _is_given(text) and text is not None:
             payload["text"] = normalize_text(text)
         response = self._client._request_compaction(body=payload)
