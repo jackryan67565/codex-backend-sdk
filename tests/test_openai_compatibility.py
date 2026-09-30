@@ -79,8 +79,9 @@ def test_reasoning_context_uses_the_verified_official_field_shape():
     assert reasoning.effort == "low"
 
 
-def test_reasoning_effort_includes_astra_max_and_parses_backend_value():
+def test_reasoning_effort_matches_pinned_official_values_and_parses_backend_value():
     assert get_args(ReasoningEffort) == (
+        "none",
         "minimal",
         "low",
         "medium",
@@ -93,6 +94,15 @@ def test_reasoning_effort_includes_astra_max_and_parses_backend_value():
 
     assert response.reasoning is not None
     assert response.reasoning.effort == "max"
+
+    response = Response.model_validate({
+        "model": "gpt-6-sol",
+        "reasoning": {"effort": "none"},
+    })
+
+    assert response.model == "gpt-6-sol"
+    assert response.reasoning is not None
+    assert response.reasoning.effort == "none"
 
 
 def test_nonstandard_custody_lifecycle_is_not_on_primary_surface():

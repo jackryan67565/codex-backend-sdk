@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1] - 2026-09-30
+
+### Added
+- Document `gpt-6.1-sol`, `gpt-6-sol`, and `gpt-6-luna` as explicit opt-in
+  Responses model IDs alongside `gpt-6-astra`, while retaining
+  `gpt-5.6-sol` as the client default.
+
+### Changed
+- Add `none` to the public and parsed `ReasoningEffort` vocabulary, matching
+  pinned `openai==2.46.0` and the official GPT-6 Sol/Luna contract.
+- Update the bundled agent skill so target projects discover the current
+  opt-in IDs without treating model-catalog enumeration as preflight support.
+
+### Tests
+- Differentially verify offline that the three new model IDs and their
+  applicable reasoning efforts survive request preparation, and that a
+  backend-reported `none` effort parses successfully.
+
+### Packaging
+- Bump the local-install package to `0.8.1`; no live backend call was made.
+
 ## [0.8.0] - 2026-09-29
 
 ### Added

@@ -24,11 +24,13 @@ The current compatibility baseline is `openai==2.46.0`, and the default model
 is exactly `gpt-5.6-sol`. Callers may override the model at client or request
 scope; the default does not prove account availability.
 
-For Astra work, select `model="gpt-6-astra"` explicitly. CBS preserves that
-model ID and `reasoning={"effort": "max"}` on the supported Responses path and
-can parse a backend-reported `max` effort. This is an offline-verified adapter
-capability, not proof that the user's ChatGPT account or current backend rollout
-will serve Astra. Do not infer availability from catalog inclusion or omission.
+For GPT-6 work, explicitly select `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6-sol`, or
+`gpt-6-luna`. CBS preserves each exact ID and supports the official reasoning
+vocabulary needed by them, including `max` for all four and `none` for GPT-6
+Sol/Luna. This is an offline-verified adapter capability, not proof that the
+user's ChatGPT account or current backend rollout will serve a model. Do not
+infer availability from catalog inclusion or omission, and do not change the
+`gpt-5.6-sol` default merely because newer opt-in IDs exist.
 
 ## Resolve the installed CBS before use
 

@@ -330,6 +330,9 @@ def test_differential_baseline_is_pinned_openai_2_46_0():
         ("model-explicit", "medium"),
         ("model-explicit", "low"),
         ("gpt-6-astra", "max"),
+        ("gpt-6.1-sol", "max"),
+        ("gpt-6-sol", "none"),
+        ("gpt-6-luna", "none"),
     ],
 )
 def test_supported_prepared_body_matches_pinned_official_values(

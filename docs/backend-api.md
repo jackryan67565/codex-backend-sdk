@@ -135,8 +135,10 @@ With the default client settings, the prepared payload includes:
 
 `gpt-5.6-sol` is the checked-in client's local default. It is not evidence that
 the undocumented backend exposes that model to every account or rollout.
-An explicit `gpt-6-astra` request is forwarded without catalog preflight; CBS
-does not infer account availability from either its local default or catalog
+Explicit `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6-sol`, and `gpt-6-luna` requests
+are forwarded without catalog preflight. The request and response models retain
+the official `none` reasoning effort used by GPT-6 Sol/Luna as well as `max`.
+CBS does not infer account availability from either its local default or catalog
 enumeration.
 
 Supported optional fields are normalized before transmission. Parameters known

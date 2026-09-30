@@ -33,8 +33,8 @@ Omitting `model` selects the current checkout's client default,
 to override it. This local default does not guarantee availability for every
 ChatGPT account or rollout.
 
-GPT-6 Astra is selectable as an explicit opt-in model on the supported
-Responses path:
+The current GPT-6 family is selectable through explicit model IDs on the
+supported Responses path:
 
 ```python
 response = client.responses.create(
@@ -45,11 +45,16 @@ response = client.responses.create(
 ```
 
 CBS preserves the exact model ID and `max` effort through request preparation,
-and parses a backend-reported `max` effort. This is compatibility support, not
-proof that the undocumented ChatGPT Codex backend enables Astra for every
-account or rollout. The official Platform's Astra-only WebSocket steering,
+and parses backend-reported official effort values. The newly documented
+opt-in IDs are `gpt-6.1-sol`, `gpt-6-sol`, and `gpt-6-luna`; GPT-6 Sol and Luna
+also support `reasoning={"effort": "none"}`. CBS does not preflight these IDs
+against the local model catalog.
+
+This is offline-verified request/response compatibility, not proof that the
+undocumented ChatGPT Codex backend enables any model for a particular account
+or rollout. The official Platform's Astra-only WebSocket steering,
 configuration updates, hosted tools, and other surfaces remain outside CBS's
-agent-safe subset.
+agent-safe subset. Omitting `model` still uses `gpt-5.6-sol`.
 
 The compatibility target is the supported subset, not the full official SDK.
 CBS pins `openai==2.46.0` as its differential-test baseline; the
@@ -123,22 +128,22 @@ cd codex-backend-sdk
 pip install -e .
 ```
 
-### Install the 0.8.0 wheel in another project
+### Install the 0.8.1 wheel in another project
 
 Release artifacts are built locally into the Git-ignored `dist/` directory.
-Install the `0.8.0` wheel directly into a target project's virtual environment:
+Install the `0.8.1` wheel directly into a target project's virtual environment:
 
 ```bash
 uv pip install \
   --python /absolute/path/to/project/.venv/bin/python \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.8.0-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.8.1-py3-none-any.whl
 ```
 
 Or, when that virtual environment includes pip:
 
 ```bash
 /absolute/path/to/project/.venv/bin/python -m pip install \
-  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.8.0-py3-none-any.whl
+  /absolute/path/to/codex-backend-sdk/dist/codex_backend_sdk-0.8.1-py3-none-any.whl
 ```
 
 Because `dist/` is not tracked, a fresh clone may not contain the artifact.

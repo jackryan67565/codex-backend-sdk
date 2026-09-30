@@ -7,7 +7,7 @@ This repository is an agent-safe, unofficial Python client for the undocumented 
 ## Current model default
 
 - The checked-in `OpenAI()` client defaults to the exact `gpt-5.6-sol` model ID. Omitting `model` uses that default; a constructor-level or request-level `model=` explicitly overrides it. The local default is not proof that every ChatGPT account or rollout can serve the model.
-- `gpt-6-astra` is an explicit opt-in model ID, not the client default. The supported Responses path preserves that model ID and `reasoning.effort="max"`; actual service remains account- and rollout-dependent until separately authorized live verification establishes it.
+- `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6-sol`, and `gpt-6-luna` are explicit opt-in model IDs, not client defaults. The supported Responses path preserves each exact ID. It also preserves the official reasoning values needed by these models, including `max` for all four and `none` for GPT-6 Sol/Luna; actual service remains account- and rollout-dependent until separately authorized live verification establishes it.
 - Keep dated `gpt-5.4` probes, measurements, and their pinned live test unchanged unless a newly authorized live run replaces that evidence. They describe observed history, not the current default.
 - Treat the checked-in source as authoritative during unreleased work. `dist/` is ignored and may be absent or older than the worktree; never tell another agent that a wheel contains the current default without inspecting or rebuilding a new versioned checkpoint.
 

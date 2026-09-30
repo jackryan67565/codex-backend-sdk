@@ -18,12 +18,14 @@ The adapter's client default is the explicit `gpt-5.6-sol` model ID. Supplying
 override that default. This is the current checkout contract, not a claim of
 universal backend availability. It is included in the `0.6.0` checkpoint.
 
-The supported request path also accepts the explicit `gpt-6-astra` model ID
-without changing the default. CBS preserves `reasoning.effort="max"` in the
-prepared body and accepts a backend-reported `max` value in the typed Response,
-matching the pinned official client's reasoning-effort vocabulary. This is an
-offline-verified compatibility claim, not evidence of ChatGPT Codex backend
-entitlement for a particular account or rollout.
+The supported request path also accepts explicit `gpt-6-astra`,
+`gpt-6.1-sol`, `gpt-6-sol`, and `gpt-6-luna` model IDs without changing the
+default. CBS preserves `reasoning.effort="max"` for all four and `none` for
+GPT-6 Sol/Luna in the prepared body, and accepts those backend-reported values
+in the typed Response. This matches the pinned official client's complete
+reasoning-effort vocabulary. It is an offline-verified compatibility claim,
+not evidence of ChatGPT Codex backend entitlement for a particular account or
+rollout.
 
 The public compatibility baseline is pinned to exact `openai==2.46.0` in the
 development extra and was differentially checked on 2026-08-26 with local mock
