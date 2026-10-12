@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- Preserve received HTTP status, sanitized headers, request ID, HTTP-body
+  completeness, and actual retry count when non-streaming SSE parsing finds
+  no terminal event. The error remains `APIConnectionError`; no output, usage,
+  body evidence, or extra retry is synthesized.
+
+### Tests
+- Cover direct and raw-response parsing with missing terminal events, zero
+  retries, unused retry allowance, prior HTTP retries, absent request IDs,
+  response cleanup, and credential-header sanitization.
+
 ## [0.8.1] - 2026-09-30
 
 ### Added

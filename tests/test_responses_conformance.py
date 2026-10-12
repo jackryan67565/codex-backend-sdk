@@ -950,6 +950,65 @@ def test_stream_without_terminal_event_fails_explicitly():
         client.responses.create(input="Hi")
 
 
+@pytest.mark.parametrize("raw_response", [False, True])
+@pytest.mark.parametrize(("max_retries", "prior_retries"), [(0, 0), (1, 0), (1, 1)])
+def test_missing_terminal_event_preserves_received_http_metadata(
+    raw_response, max_retries, prior_retries,
+):
+    body = _sse({"type": "response.output_text.delta", "delta": "partial"})
+    response = _http_response(body=body, headers={
+        "Content-Type": "text/event-stream",
+        "X-Request-ID": "req_missing_terminal",
+        "Authorization": "synthetic-response-token",
+        "ChatGPT-Account-ID": "synthetic-response-account",
+        "Set-Cookie": "synthetic-cookie",
+        "WWW-Authenticate": "synthetic-auth-challenge",
+    })
+    closed: list[bool] = []
+    response.close = lambda: closed.append(True)
+    outcomes = [_http_response(503, body=b"{}") for _ in range(prior_retries)] + [response]
+    client, adapter = _cbs_client(outcomes, max_retries=max_retries)
+
+    with client, pytest.raises(APIConnectionError, match="terminal response event") as caught:
+        if raw_response:
+            raw = client.responses.with_raw_response.create(input="Hi")
+            assert raw.content == body
+            raw.parse()
+        else:
+            client.responses.create(input="Hi")
+
+    exc = caught.value
+    assert exc.status_code == 200
+    assert exc.request_id == "req_missing_terminal"
+    assert exc.response_headers["Content-Type"] == "text/event-stream"
+    for name in ("Authorization", "ChatGPT-Account-ID", "Set-Cookie", "WWW-Authenticate"):
+        assert name not in exc.response_headers
+    assert exc.request is adapter.requests[-1]
+    assert "Authorization" not in exc.request.headers
+    assert "ChatGPT-Account-ID" not in exc.request.headers
+    assert exc.response_body_complete is True
+    assert exc.retries_taken == prior_retries
+    assert exc.body is None
+    assert exc.partial_response_body is None
+    assert exc.__cause__ is None
+    assert len(adapter.requests) == prior_retries + 1
+    assert closed == [True]
+
+
+def test_missing_terminal_event_does_not_invent_absent_request_id():
+    client, adapter = _cbs_client([_http_response(body=b"")], max_retries=0)
+
+    with client, pytest.raises(APIConnectionError) as caught:
+        client.responses.create(input="Hi")
+
+    assert caught.value.status_code == 200
+    assert caught.value.request_id is None
+    assert caught.value.response_headers == {}
+    assert caught.value.response_body_complete is True
+    assert caught.value.retries_taken == 0
+    assert len(adapter.requests) == 1
+
+
 def test_malformed_sse_fails_as_response_validation_error():
     response = _http_response(body=b"data: {not-json}\n\n")
     closed: list[bool] = []

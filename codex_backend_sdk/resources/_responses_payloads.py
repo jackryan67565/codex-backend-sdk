@@ -193,6 +193,11 @@ def collect_response(
         raise APIConnectionError(
             message="Response stream ended without a terminal response event.",
             request=_prepared_request(http_response),
+            status_code=http_response.status_code,
+            request_id=http_response.headers.get("x-request-id"),
+            response_headers=http_response.headers,
+            response_body_complete=http_response._content_consumed,
+            retries_taken=getattr(http_response, "_codex_retries_taken", None),
         )
     if (
         terminal_event_type == "response.completed"

@@ -283,6 +283,12 @@ usage, terminality, or completion. Credential-bearing request and response
 headers remain removed. Streaming callers continue receiving events
 incrementally and retain their existing iterator error behavior.
 
+If the HTTP body is fully read but its SSE events contain no terminal response,
+CBS still raises `APIConnectionError`. That error retains the received safe HTTP
+metadata and actual retry count, with `response_body_complete=True`. This flag
+describes only HTTP body ingestion, not model completion; `body` and
+`partial_response_body` remain `None`, and no output or usage is synthesized.
+
 The client default is `max_retries=2`, matching the pinned official client's
 retry-count default for this path. Set `max_retries=0` when a caller requires at
 most one transport attempt. Any automatic replay after an ambiguous transport

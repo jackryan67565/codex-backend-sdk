@@ -103,6 +103,13 @@ application entity body emitted by Requests after transfer/content decoding,
 not HTTP chunk frames. They remain explicitly incomplete and are never parsed
 into a Response or used to synthesize output, usage, status, or terminality.
 
+A fully read HTTP body with no terminal SSE event also raises
+`APIConnectionError`, preserving its received status, safe request ID/headers,
+and actual retry count. Its `response_body_complete=True` describes HTTP body
+ingestion only, not a completed model response. Neither `body` nor
+`partial_response_body` is populated for this parsing failure, and it does not
+trigger an automatic retry.
+
 `max_retries` applies to Responses creation with the pinned official retry
 conditions: connection/timeouts, 408, 409, 429, 5xx, and explicit
 `x-should-retry`. `max_retries=0` performs at most one transport attempt; the
